@@ -24,7 +24,6 @@ import nrrd
 from scipy import ndimage
 import itk
 
-
 def readDicom(foldername):
     print( "Reading Dicom directory: ", foldername )
     reader = sitk.ImageSeriesReader()
@@ -37,7 +36,22 @@ def readDicom(foldername):
     size = image.GetSize()
     print( "Image size:", size[0], size[1], size[2] )
     
-    return image
+    reader2 = sitk.ImageFileReader()
+    first_dicom_name = os.listdir(foldername)[0]
+    reader2.SetFileName(os.path.join(foldername, first_dicom_name ))
+    reader2.LoadPrivateTagsOn();
+    reader2.ReadImageInformation();
+    for k in reader2.GetMetaDataKeys():
+        v = reader2.GetMetaData(k)
+        print("({0}) = = \"{1}\"".format(k,v))
+    
+    spacing = reader2.GetMetaData('0028|0030').split('\\') + [reader2.GetMetaData('0018|0050')]
+    print('Image spacing: ', spacing)
+    origin = reader2.GetMetaData('0020|0032').split('\\')
+    origin = np.array(origin).astype(np.float64)
+    print('Origin: ', origin)
+    
+    return image, size, spacing, origin
 
 def writeDicom(image, targetfolder):    
     print( "Writing image:", targetfolder )
@@ -47,6 +61,38 @@ def writeDicom(image, targetfolder):
 #def showDicom(image):
 #    sitk.Show( image, "Dicom Series" , debugOn=True)
 #    
+    
+def planar_measure(X, alpha):
+    # Attempt adaptive filtering with planar measure, structure tensor T
+    # Get x-gradient in "sx"
+    sx = ndimage.sobel(X,axis=0,mode='constant')
+    # Get y-gradient in "sy"
+    sy = ndimage.sobel(X,axis=1,mode='constant')
+    sz = ndimage.sobel(X, axis=2, mode='constant')
+    
+    # alpha  is a constant > 1. Negative certainty estimates
+    # in the formula above are set to zero. A large alpha sets the
+    # certainty to zero for all estimates not corresponding to the
+    # plane case.
+    print('Calculating Tensor matrices and planar measures....')
+    gradI = np.stack([sx, sy, sz], axis=0).reshape((1,3) + X.shape)
+    gradI = gradI.astype(np.float64)
+    print('gradI shape: ', gradI.shape)
+    T = np.multiply(np.transpose(gradI, (1,0,2,3,4)), gradI)  # Image structure tensor
+    T = np.transpose(T, (2,3,4,0,1))
+    lambd_unsorted = np.linalg.eigvals(T) # 4D array of shape (x.shape) + (3)
+    lambd = np.sort(lambd_unsorted, axis=-1)
+    print('lambd shape:', lambd.shape)
+
+    # Calculate response function parameters
+    lambd_3 = lambd[:,:,:,2] # lambd3 > labmd2 > lambd_1 >= 0
+    lambd_2 = lambd[:,:,:,1]
+#    lambd_1 = lambd[:,:,:,0] 
+    c_plane = np.abs(lambd_3 - alpha*lambd_2)/np.abs(lambd_3) # planar measure
+    c_plane[c_plane < 0] = 0
+    c_plane = np.nan_to_num(c_plane)
+
+    return c_plane
     
 def hessian(x):
     """
@@ -147,9 +193,15 @@ def sheetness_response(x, sigma):
     GAMMA = 0.5*np.amax(R_noise)
     
     M = np.empty(x.shape, dtype=x.dtype)
-    M = np.exp(-np.square(R_sheet)/(2*np.square(ALPHA))) * \
-        (1 - np.exp(-np.square(R_blob)/(2*np.square(BETA)))) * \
-        (1 - np.exp(-np.square(R_noise)/(2*np.square(GAMMA))))
+    sheet_enhancement = np.exp(-np.square(R_sheet)/(2*np.square(ALPHA)))
+    blob_noise_elimination = (1 - np.exp(-np.square(R_blob)/(2*np.square(BETA))))
+    noise_reduction = (1 - np.exp(-np.square(R_noise)/(2*np.square(GAMMA))))
+    
+    # Set behavior of undefined terms when divide by null lambd_3
+    sheet_enhancement[np.isnan(sheet_enhancement)] = 1
+    blob_noise_elimination[np.isnan(blob_noise_elimination)] = 0
+    
+    M = sheet_enhancement * blob_noise_elimination * noise_reduction
     M[lambd_3>0] = 0
     M = np.nan_to_num(M)    # replace nan values with zero
     return M
@@ -174,51 +226,77 @@ def sheetness_measure(x, sigmas):
         print(M[:3,:3,1])
     return M
     
-#if __name__ == '__main__':
-# ask user to select folder containing DICOM image series
-print("Test readDicomCT.py: select DICOM folder")    
-foldername = mat.uigetdir()
-
-# read image
-image = readDicom(foldername) # GetPixel indexes (x, y, z)
-X = sitk.GetArrayFromImage(image) 
-print(X.shape)    # numpy array indexes (z, y, x) (height, row, column)
-
-# Calculate sheetness measure maximum over scale sigma range
-sigmas = np.arange(1,6,0.5)
-M = sheetness_measure(X, sigmas)    
+if __name__ == '__main__':
+    # ask user to select folder containing DICOM image series
+    print("Test readDicomCT.py: select DICOM folder")    
+    foldername = mat.uigetdir()
     
-# write sheetness measure as nrrd image
-M_out = np.rot90(M, 1, (0,2))
-M_out = np.flip(M_out, axis=0)
-filename = 'sheetness_score3' + '.nrrd'
-nrrd.write(os.path.join(foldername, filename), M_out)
+    # read image
+    image, size_image, spacing, origin = readDicom(foldername) # GetPixel indexes (x, y, z)
+    X = sitk.GetArrayFromImage(image)  # numpy array indexes (z, y, x) (height, row, column)
+    X = np.transpose(X, axes=(2,1,0)) # (z, y, x) -> (x, y, z)
+    #M_out = np.rot90(M, 1, (0,2))
+    #M_out = np.flip(M_out, axis=0)
+    print('X shape: ', X.shape)   
     
-
-
-#### Test sheetness_measure
-## Calculate sheetness measure maximum over scale sigma range
-#X = np.random.randn(10,10,10)
-#sigmas = [1, 1.5, 2]
-#M = sheetness_measure(X, sigmas)
-
+    # Calculate sheetness measure maximum over scale sigma range
+    sigmas = np.arange(1,6,0.5)
+    M = sheetness_measure(X, sigmas)    
         
-#### Test sheetness_response
-#X = np.random.randn(100,100,100)
-#
-## Calculate sheetness measure over scale sigma
-#sigma = 1
-#sheetness = sheetness_response(X, sigma)        
+#    # write sheetness measure as nrrd image
+#    M_out = M
+#    filenum = 8
+#    filename = 'sheetness_score' + str(filenum) + '.nrrd'
+#    #nrrd.write(os.path.join(foldername, filename), M_out)
+#    nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing})
+#    #nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing, 'space origin':nrrd.format_optional_vector(origin)})
         
-        
-#    # Broken ITK sheetness filter
-#    sheetness = itk.DescoteauxSheetnessImageFilter.New(X)
-#    M = sitk.DescoteauxSheetnessImageFilter(X) # https://itk.org/Doxygen/html/classitk_1_1DescoteauxSheetnessImageFilter.html
-        
+    # write sheetness-boosted CT nrrd image
+    BOOST=2000
+    X_boosted = X + BOOST*M
+    filename2 = 'zbone_Descoteaux_boost' + '_' + str(BOOST) + '.nrrd'
+    #nrrd.write(os.path.join(foldername, filename), M_out)
+    nrrd.write(os.path.join(foldername, filename2), X_boosted, header={'sizes': size_image, 'spacings': spacing})
     
-##### Test hessian_scale2d
-##x = np.random.randn(100, 100, 100)
-##x = np.array([[1, 2, 6], [3, 4, 5]])
+    # Calculate planar measure of image
+    ALPHA = 2
+    BETA = 420
+    c_plane = planar_measure(X, ALPHA)
+    
+    # write planar-boosted CT nrrd image
+    X_planar_boosted = X + BETA*c_plane
+    filename3 = 'zbone_Westin_boost' + str(ALPHA) + '_' + str(BETA) + '.nrrd'
+    nrrd.write(os.path.join(foldername, filename3), X_planar_boosted, header={'sizes': size_image, 'spacings': spacing})
+
+    # write sheetness- and planar-boosted CT nrrd image
+    X_both_boosted = X + BETA*c_plane + BOOST*M
+    filename4 = 'zbone_Descoteaux_Westin_boost' + str(ALPHA) + '_' + str(BETA) + '_' + str(BOOST) + '.nrrd'
+    nrrd.write(os.path.join(foldername, filename4), X_both_boosted, header={'sizes': size_image, 'spacings': spacing})
+
+    
+    #### Test sheetness_measure
+    ## Calculate sheetness measure maximum over scale sigma range
+    #X = np.random.randn(10,10,10)
+    #sigmas = [1, 1.5, 2]
+    #M = sheetness_measure(X, sigmas)
+    
+            
+    #### Test sheetness_response
+    #X = np.random.randn(100,100,100)
+    #
+    ## Calculate sheetness measure over scale sigma
+    #sigma = 1
+    #sheetness = sheetness_response(X, sigma)        
+            
+            
+    #    # Broken ITK sheetness filter
+    #    sheetness = itk.DescoteauxSheetnessImageFilter.New(X)
+    #    M = sitk.DescoteauxSheetnessImageFilter(X) # https://itk.org/Doxygen/html/classitk_1_1DescoteauxSheetnessImageFilter.html
+            
+        
+    ##### Test hessian_scale2d
+    ##x = np.random.randn(100, 100, 100)
+    ##x = np.array([[1, 2, 6], [3, 4, 5]])
 #x = np.zeros((10,10))
 #x[:,6:] = 9
 #x[:, 4] = 1

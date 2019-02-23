@@ -240,16 +240,16 @@ if __name__ == '__main__':
     print('X shape: ', X.shape)   
     
     # Calculate sheetness measure maximum over scale sigma range
-    sigmas = np.arange(1,6,0.5)
+    sigmas = np.arange(0.2,6,0.2)
     M = sheetness_measure(X, sigmas)    
         
-#    # write sheetness measure as nrrd image
-#    M_out = M
-#    filenum = 8
-#    filename = 'sheetness_score' + str(filenum) + '.nrrd'
-#    #nrrd.write(os.path.join(foldername, filename), M_out)
-#    nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing})
-#    #nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing, 'space origin':nrrd.format_optional_vector(origin)})
+    # write sheetness measure as nrrd image
+    M_out = M
+    filenum = 9
+    filename = 'sheetness_score' + str(filenum) + '.nrrd'
+    #nrrd.write(os.path.join(foldername, filename), M_out)
+    nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing})
+    #nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing, 'space origin':nrrd.format_optional_vector(origin)})
         
     # write sheetness-boosted CT nrrd image
     BOOST=2000

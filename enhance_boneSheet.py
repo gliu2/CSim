@@ -6,7 +6,7 @@ Created on Tue Feb 12 08:43:24 2019
 
 Read DICOM image. Code adapted from
 
-Last edit: 2/3/2019 
+Last edit: 2/26/2019 
 
 Dependencies: mat.py
 """
@@ -22,7 +22,10 @@ import mat
 import matplotlib.pyplot as plt
 import nrrd
 from scipy import ndimage
+import scipy
 import itk
+import pydicom
+import skimage
 
 def readDicom(foldername):
     print( "Reading Dicom directory: ", foldername )
@@ -227,17 +230,40 @@ def sheetness_measure(x, sigmas):
     return M
     
 if __name__ == '__main__':
-    # ask user to select folder containing DICOM image series
-    print("Test readDicomCT.py: select DICOM folder")    
-    foldername = mat.uigetdir()
+#    # ask user to select folder containing DICOM image series
+#    print("Test readDicomCT.py: select DICOM folder")    
+#    foldername = mat.uigetdir()
+#    
+#    # read image
+#    image, size_image, spacing, origin = readDicom(foldername) # GetPixel indexes (x, y, z)
+#    X = sitk.GetArrayFromImage(image)  # numpy array indexes (z, y, x) (height, row, column)
+#    X = np.transpose(X, axes=(2,1,0)) # (z, y, x) -> (x, y, z)
+#    #M_out = np.rot90(M, 1, (0,2))
+#    #M_out = np.flip(M_out, axis=0)
+#    print('X shape: ', X.shape)   
     
-    # read image
-    image, size_image, spacing, origin = readDicom(foldername) # GetPixel indexes (x, y, z)
-    X = sitk.GetArrayFromImage(image)  # numpy array indexes (z, y, x) (height, row, column)
+    # Read image with pydicom
+    filepath = mat.uigetfile()
+    foldername = os.path.dirname(filepath)
+    ds = pydicom.dcmread(filepath)  # plan dataset
+    spacing2d = ds.PixelSpacing
+    spacing = [spacing2d[0], spacing2d[1], ds.SliceThickness]
+    origin = ds.ImagePositionPatient
+    size_image = [ds.Columns, ds.Rows, ds.NumberOfFrames]
+    X = ds.pixel_array
     X = np.transpose(X, axes=(2,1,0)) # (z, y, x) -> (x, y, z)
-    #M_out = np.rot90(M, 1, (0,2))
-    #M_out = np.flip(M_out, axis=0)
-    print('X shape: ', X.shape)   
+    
+#    print('X shape: ', X.shape)  
+    
+    # Make image isometric
+    upsample_factor_iso = spacing/np.min(spacing)
+    
+    # Upsample image
+    UPSAMPLE_FACTOR = 4
+    X_old = X
+    new_shape = np.round(size_image * upsample_factor_iso * UPSAMPLE_FACTOR)
+    new_spacing = size_image/new_shape*spacing
+    X = skimage.transform.resize(X, output_shape=new_shape, order=3) # order 3 - cubic spline interpolation
     
     # Calculate sheetness measure maximum over scale sigma range
     sigmas = np.arange(0.2,6,0.2)
@@ -248,7 +274,7 @@ if __name__ == '__main__':
     filenum = 9
     filename = 'sheetness_score' + str(filenum) + '.nrrd'
     #nrrd.write(os.path.join(foldername, filename), M_out)
-    nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing})
+    nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': new_shape, 'spacings': new_spacing})
     #nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing, 'space origin':nrrd.format_optional_vector(origin)})
         
     # write sheetness-boosted CT nrrd image
@@ -256,7 +282,7 @@ if __name__ == '__main__':
     X_boosted = X + BOOST*M
     filename2 = 'zbone_Descoteaux_boost' + '_' + str(BOOST) + '.nrrd'
     #nrrd.write(os.path.join(foldername, filename), M_out)
-    nrrd.write(os.path.join(foldername, filename2), X_boosted, header={'sizes': size_image, 'spacings': spacing})
+    nrrd.write(os.path.join(foldername, filename2), X_boosted, header={'sizes': new_shape, 'spacings': new_spacing})
     
     # Calculate planar measure of image
     ALPHA = 2
@@ -266,12 +292,12 @@ if __name__ == '__main__':
     # write planar-boosted CT nrrd image
     X_planar_boosted = X + BETA*c_plane
     filename3 = 'zbone_Westin_boost' + str(ALPHA) + '_' + str(BETA) + '.nrrd'
-    nrrd.write(os.path.join(foldername, filename3), X_planar_boosted, header={'sizes': size_image, 'spacings': spacing})
+    nrrd.write(os.path.join(foldername, filename3), X_planar_boosted, header={'sizes': new_shape, 'spacings': new_spacing})
 
     # write sheetness- and planar-boosted CT nrrd image
     X_both_boosted = X + BETA*c_plane + BOOST*M
     filename4 = 'zbone_Descoteaux_Westin_boost' + str(ALPHA) + '_' + str(BETA) + '_' + str(BOOST) + '.nrrd'
-    nrrd.write(os.path.join(foldername, filename4), X_both_boosted, header={'sizes': size_image, 'spacings': spacing})
+    nrrd.write(os.path.join(foldername, filename4), X_both_boosted, header={'sizes': new_shape, 'spacings': new_spacing})
 
     
     #### Test sheetness_measure

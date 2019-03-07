@@ -32,7 +32,7 @@ LineThickness=1
 points = []
 
 # mouse callback function
-def begueradj_draw(event, x, y,flags,param):
+def paintbrush_draw(event, x, y,flags,param):
     global former_x, former_y, drawing, mode
 
     if event==cv2.EVENT_LBUTTONDOWN:
@@ -79,7 +79,7 @@ for f in onlyfiles:
     im = cv2.imread(os.path.join(mypath, f))
     im_copy = im.copy()
     cv2.namedWindow("Segment OpenCV")
-    cv2.setMouseCallback('Segment OpenCV',begueradj_draw)
+    cv2.setMouseCallback('Segment OpenCV', paintbrush_draw)
     while(1):        
         cv2.imshow('Segment OpenCV', im)
         k=cv2.waitKey(1)&0xFF  

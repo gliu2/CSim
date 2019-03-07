@@ -25,16 +25,15 @@ import numpy as np
 import os
 
 drawing=False # true if mouse is pressed
-mode=True # if True, draw rectangle. Press 'm' to toggle to curve
+mode=True # if True, draw as paintbrush. Press 'm' to toggle
 BresenhamConnectivity=4
 LineThickness=1
 
 points = []
-counter=0
 
 # mouse callback function
 def begueradj_draw(event, x, y,flags,param):
-    global former_x, former_y, drawing, mode, im, counter
+    global former_x, former_y, drawing, mode
 
     if event==cv2.EVENT_LBUTTONDOWN:
         drawing=True

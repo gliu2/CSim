@@ -84,7 +84,7 @@ class UNet3D_GL(nn.Module):
         e7 = self.ec7(e6)
 #         print 'e7: ',e7.size()
         del e5, e6
-        dc9 = self.dc9(e7)
+#        dc9 = self.dc9(e7)
 #         print 'dc9: ',dc9.size()
         d9 = torch.cat((self.dc9(e7), syn2),dim=1)
         del e7, syn2

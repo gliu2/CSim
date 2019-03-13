@@ -5,6 +5,8 @@ Created on Thu Dec 27 11:04:55 2018
 @author: George
 
 Test how utils.py Generator_3D_patches
+
+Dependencies: Unet3d_pytorchGL.py
 """
 
 # from __future__ import print_function
@@ -23,19 +25,22 @@ import torch.utils.data as data_utils
 #import time
 import nrrd   # install at https://pypi.org/project/pynrrd/
 from Unet3d_pytorchGL import UNet3D_GL
+import operator
 
 # Training settings
-parser = argparse.ArgumentParser(description="PyTorch InfantSeg")
+BATCH_SIZE = 4
+
+parser = argparse.ArgumentParser(description="PyTorch CSim_segmentation")
 parser.add_argument("--how2normalize", type=int, default=0, help="how to normalize the data")
 #parser.add_argument("--batchSize", type=int, default=10, help="training batch size")
-parser.add_argument("--batchSize", type=int, default=1, help="training batch size") # reduce batch size for testing
+parser.add_argument("--batchSize", type=int, default=BATCH_SIZE, help="training batch size") # reduce batch size for testing
 parser.add_argument("--numofIters", type=int, default=200000, help="number of iterations to train for")
 parser.add_argument("--showTrainLossEvery", type=int, default=1, help="number of iterations to show train loss")
 parser.add_argument("--saveModelEvery", type=int, default=4000, help="number of iterations to save the model")
 parser.add_argument("--showTestPerformanceEvery", type=int, default=1, help="number of iterations to show test performance")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
 parser.add_argument("--decLREvery", type=int, default=100000, help="Sets the learning rate to the initial LR decayed by momentum every n iterations, Default: n=40000")
-parser.add_argument("--cuda", action="store_true", help="Use cuda?")
+parser.add_argument('--disable-cuda', action='store_true', help='Disable CUDA')
 parser.add_argument("--resume", default="", type=str, help="Path to checkpoint (default: none)")
 parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--threads", type=int, default=1, help="Number of threads for data loader to use, Default: 1")
@@ -47,9 +52,18 @@ parser.add_argument("--prefixPredictedFN", default="preSub_wce_lrdcr_0118_", typ
 
 # Create samples that is multiple of batchsize
 # Cicek et al. 2016 used input voxel tile shape of (132,132,116)
-tile_H = 132
-tile_W = 132
-tile_D = 116
+# Note: 3D unet input 132 x 132 x 116 voxels; Vnet input 128 x 128 x 64 voxels
+#tile_H = 132
+#tile_W = 132
+#tile_D = 116
+
+#tile_H = 128
+#tile_W = 128
+#tile_D = 112
+
+tile_H = 64
+tile_W = 64
+tile_D = 56
 
 #tile_H = 3
 #tile_W = 3
@@ -110,13 +124,28 @@ def Generator_3D_patch(path_folder):
 #                sample = data[:tile_H,:tile_W,:tile_D]
 #            yield tile1
             
+def debug_memory():
+    import collections, gc, torch
+    tensors = collections.Counter((str(o.device), o.dtype, tuple(o.shape))
+                                  for o in gc.get_objects()
+                                  if torch.is_tensor(o))
+    for line in sorted(tensors.items(), key=operator.itemgetter(1)):
+        print('{}\t{}'.format(*line))
             
 
 def main():    
     
     global opt, model 
     opt = parser.parse_args()
+
+    # Check if CUDA is available
+    opt.device = None
+    if not opt.disable_cuda and torch.cuda.is_available():
+        opt.device = torch.device('cuda')
+    else:
+        opt.device = torch.device('cpu')
     print(opt)
+    
 
 #    optimizer = optim.SGD(net.parameters(),lr=opt.lr)
 #    criterion = nn.CrossEntropyLoss()
@@ -128,56 +157,22 @@ def main():
 #    print('size of params is ')
 #    print(params[0].size())
 
-    path_patients_X = '/Users/George/Documents/Blevins/CT_Segmentations/original_CT/'
-    path_patients_y = '/Users/George/Documents/Blevins/CT_Segmentations/CarotidArtery/'
+#    path_patients_X = '/Users/George/Documents/Blevins/CT_Segmentations/original_CT/'  # for GL windows machine
+#    path_patients_y = '/Users/George/Documents/Blevins/CT_Segmentations/CarotidArtery/'  # for GL windows machine
+    path_patients_X = 'C:/Users/CTLab/Documents/George/CT_segmentations/original_CT'  # for CSim lab windows machine
+    path_patients_y = '/Users/CTLab/Documents/George/CT_Segmentations/CarotidArtery/'   # for CSim lab windows machine
 
 #    batch_size=10
 #    data_generator = Generator_3D_patches(path_patients_h5,opt.batchSize,inputKey1='dataMR',outputKey='dataSeg')
 #    data_generator = Generator_3D_patches(path_patients_X, path_patients_y, opt.batchSize) # utils.py
     print('Batch size:', opt.batchSize) 
     
-#    data_generatorGL = Generator_3D_patchesGL(path_patients_X, opt.batchSize) # local 
-#    data_generatorGL_test = Generator_3D_patchesGL(path_patients_y, opt.batchSize)
-   
-#    # Test Generator_3D_patch
-#    print('Test Generator_3D_patch')
-#    data_generatorGL_patch = Generator_3D_patch(path_patients_X)
-#    N = 5
-#    X = np.zeros((N,tile_H, tile_W, tile_D))
-#    for i in range(0,N):
-#        print('Working on tile:', i+1, 'of', N)
-#        data_batch = data_generatorGL_patch.__next__() # Returns 1 data tile
-#        X[i,:,:,:] = data_batch
-#        print(data_batch)
-#        
-#    # Test Generator_3D_patchesGL
-#    print('Test Generator_3D_patchesGL')
-#    data_generatorGL = Generator_3D_patchesGL(path_patients_X, opt.batchSize) # local 
-#    N2 = 1 # number of batches to generate
-#    X2 = np.zeros((N2*opt.batchSize,tile_H, tile_W, tile_D))
-##    y = np.zeros((N,tile_H, tile_W, tile_D))
-#    for i in range(0,N2):
-#        print('Working on batch:', i+1, 'of', N2, 'of size', opt.batchSize)
-#        data_batch = data_generatorGL.__next__() # Returns 1 data tile
-#        X2[i*opt.batchSize:(i+1)*opt.batchSize,:,:,:] = data_batch
-#        print('X2 shape:', X2.shape)
-#        print(X2)   
-        
-    # Train unit with toy data
-    # Note: 3D unet input 132 x 132 x 116 voxels; Vnet input 128 x 128 x 64 voxels
-    # Create random Tensors to hold inputs and outputs
     batch_generatorGL = Generator_3D_patchesGL(path_patients_X, opt.batchSize)
-    first_batch = batch_generatorGL.__next__()
-    x_expanded = np.expand_dims(first_batch, axis=1)
-    print('Shape first batch:', first_batch.shape)
-    print('Shape first batch expanded:', x_expanded.shape)
-#    x_expanded = x_expanded.float()
-    x = torch.from_numpy(x_expanded).float() # match float default type for weights and biases 
     label_generatorGL = Generator_3D_patchesGL(path_patients_y, opt.batchSize) # local 
-    y = torch.from_numpy(label_generatorGL.__next__())
 
     # Construct our model by instantiating the class defined in Unet3d_pytorch.py
-    net = UNet3D_GL(in_channel=1, n_classes=2) # kernel_size=3, stride=1, padding=1, bias=False, batchnorm=False        
+    net = UNet3D_GL(in_channel=1, n_classes=2) # kernel_size=3, stride=1, padding=1, bias=False, batchnorm=False      
+    net = net.to(opt.device)
         
     # Construct our loss function and an Optimizer. The call to model.parameters()
     # in the SGD constructor will contain the learnable parameters of the two
@@ -186,6 +181,27 @@ def main():
     optimizer = optim.SGD(net.parameters(),lr=opt.lr)
     print('Start training model...')
     for t in range(500):
+       
+        # empty CUDA cache every few minibatches
+        if opt.device == torch.device('cuda') and np.mod(t,2)==0:
+            torch.cuda.empty_cache()
+            
+        # Generate next mini-batch
+        next_batch = batch_generatorGL.__next__()
+        y = torch.from_numpy(label_generatorGL.__next__())
+        x_expanded = np.expand_dims(next_batch, axis=1)
+#        print('Shape first batch:', next_batch.shape)
+#        print('Shape first batch expanded:', x_expanded.shape)
+    #    x_expanded = x_expanded.float()
+        x = torch.from_numpy(x_expanded).float() # match float default type for weights and biases 
+        
+        # Convert target labels to type long for computing loss function
+        y = y.type(dtype=torch.long)
+        
+        #  pushing tensors to CUDA device if available (you have to reassign them)
+        x = x.to(opt.device)
+        y = y.to(opt.device)
+        
         # Forward pass: Compute predicted y by passing x to the model
         y_pred = net(x)
 
@@ -198,7 +214,6 @@ def main():
         loss.backward()
         optimizer.step()
     
-    
     #    inputs,labels = data_generator.__next__() # 132 x 132 x 116 voxel tile of the image    
 #        print('shape is ....',inputs.shape)
 #        labels = np.squeeze(labels)
@@ -210,6 +225,10 @@ def main():
 #        labels = torch.from_numpy(labels)
 #    print('X:',X)
 #    print('y:',y)
+    
+        # Analyze memory footprint to debug CPU/CUDA memory leaks
+#        debug_memory()
+    
     print('Done')
     
 if __name__ == '__main__':     

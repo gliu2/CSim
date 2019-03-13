@@ -242,31 +242,43 @@ if __name__ == '__main__':
 #    #M_out = np.flip(M_out, axis=0)
 #    print('X shape: ', X.shape)   
     
-    # Read image with pydicom
+#    # Read image with pydicom
+#    filepath = mat.uigetfile()
+#    foldername = os.path.dirname(filepath)
+#    ds = pydicom.dcmread(filepath)  # plan dataset
+#    spacing2d = ds.PixelSpacing
+#    spacing = [spacing2d[0], spacing2d[1], ds.SliceThickness]
+#    origin = ds.ImagePositionPatient
+#    size_image = [ds.Columns, ds.Rows, ds.NumberOfFrames]
+#    X = ds.pixel_array
+#    X = np.transpose(X, axes=(2,1,0)) # (z, y, x) -> (x, y, z)
+    
+    # Read NRRD image with pynrrd
     filepath = mat.uigetfile()
     foldername = os.path.dirname(filepath)
-    ds = pydicom.dcmread(filepath)  # plan dataset
-    spacing2d = ds.PixelSpacing
-    spacing = [spacing2d[0], spacing2d[1], ds.SliceThickness]
-    origin = ds.ImagePositionPatient
-    size_image = [ds.Columns, ds.Rows, ds.NumberOfFrames]
-    X = ds.pixel_array
-    X = np.transpose(X, axes=(2,1,0)) # (z, y, x) -> (x, y, z)
+    data, header = nrrd.read(filepath)
+    spacing = np.diagonal(header['space directions'])
+    size_image = np.shape(data)
+    origin = header['space origin']
+    X = data
     
 #    print('X shape: ', X.shape)  
     
-    # Make image isometric
-    upsample_factor_iso = spacing/np.min(spacing)
+    # No upsample or make isometric
+    new_shape = size_image
+    new_spacing = spacing
     
-    # Upsample image
-    UPSAMPLE_FACTOR = 4
-    X_old = X
-    new_shape = np.round(size_image * upsample_factor_iso * UPSAMPLE_FACTOR)
-    new_spacing = size_image/new_shape*spacing
-    X = skimage.transform.resize(X, output_shape=new_shape, order=3) # order 3 - cubic spline interpolation
+#    # Make image isometric and Upsample image
+#    upsample_factor_iso = spacing/np.min(spacing)
+#    UPSAMPLE_FACTOR = 4
+#    X_old = X
+#    new_shape = np.round(size_image * upsample_factor_iso * UPSAMPLE_FACTOR)
+#    new_spacing = size_image/new_shape*spacing
+#    X = skimage.transform.resize(X, output_shape=new_shape, order=3) # order 3 - cubic spline interpolation
     
     # Calculate sheetness measure maximum over scale sigma range
-    sigmas = np.arange(0.2,6,0.2)
+#    sigmas = np.arange(0.2,6,0.2)
+    sigmas = np.arange(1,6,1)
     M = sheetness_measure(X, sigmas)    
         
     # write sheetness measure as nrrd image
@@ -278,7 +290,7 @@ if __name__ == '__main__':
     #nrrd.write(os.path.join(foldername, filename), M_out, detached_header=False, header={'sizes': size_image, 'spacings': spacing, 'space origin':nrrd.format_optional_vector(origin)})
         
     # write sheetness-boosted CT nrrd image
-    BOOST=2000
+    BOOST=20000
     X_boosted = X + BOOST*M
     filename2 = 'zbone_Descoteaux_boost' + '_' + str(BOOST) + '.nrrd'
     #nrrd.write(os.path.join(foldername, filename), M_out)
@@ -288,6 +300,8 @@ if __name__ == '__main__':
     ALPHA = 2
     BETA = 420
     c_plane = planar_measure(X, ALPHA)
+    nrrd.write(os.path.join(foldername, filename), c_plane, detached_header=False, header={'sizes': new_shape, 'spacings': new_spacing})
+
     
     # write planar-boosted CT nrrd image
     X_planar_boosted = X + BETA*c_plane

@@ -21,6 +21,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from sklearn.utils.multiclass import unique_labels
 
+# Classes must be ndarray of str objects
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=False,
                           title=None,
@@ -73,6 +74,14 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
+
+#%% Useful function to convert numerical class rank-1 numpy array to string vector for labeling confusion matrix plot
+def num2str_labels(label_num, class_names):
+    label_str = []
+    for i in np.arange(len(label_num)):
+        label_str.append(class_names[label_num[i]])
+        
+    return label_str
 
 #%%
 np.set_printoptions(precision=2)

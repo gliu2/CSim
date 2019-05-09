@@ -71,7 +71,23 @@ def accuracy(y_true, y_pred):
         acc = num_correct / np.shape(y_true)[0]
         return acc
     
+def load_trainingdata():
+    filepath = "C:/Users/CTLab/Documents/George/Arri_analysis_4-29-19/kmeans_data_5-6-19.mat"
+    NUM_FEATURES = 21
+    mat = hdf5storage.loadmat(filepath) 
+    x = torch.from_numpy(mat['X_single'][:,:NUM_FEATURES]) # make 24 -> 21 features as needed
+    y = torch.from_numpy(mat['y_label']).long()-1 # convert to long tensor for loss function
+    y = y.squeeze(1)
+    return x, y
     
+def load_validationdata():
+    filepath_val = "C:/Users/CTLab/Documents/George/Arri_analysis_5-6-19/FreshCadaver004_20190429_data_5-6-19_pyfriendly.mat"
+    NUM_FEATURES = 21
+    mat3 = hdf5storage.loadmat(filepath_val)
+    x_val = torch.from_numpy(mat3['X'][:,:NUM_FEATURES]).float() # make 24 -> 21 features as needed; convert to float tensor
+    y_val = torch.from_numpy(mat3['y_label']).long()-1 # convert to long tensor for loss function
+    y_val = y_val.squeeze(1) 
+    return x_val, y_val
     
 #%% Train Arrinet
 def main():
@@ -83,14 +99,16 @@ def main():
     
     # Load training data
     print('Load training data...')
-    filepath = "C:/Users/CTLab/Documents/George/Arri_analysis_4-29-19/kmeans_data_5-6-19.mat"
-    if 'mat2' in locals(): print('Yes')
-    mat2 = hdf5storage.loadmat(filepath)    
-    x = torch.from_numpy(mat2['X_single'][:,:NUM_FEATURES]) # make 24 -> 21 features as needed
-    y = torch.from_numpy(mat2['y_label']).long()-1 # convert to long tensor for loss function
-    y = y.squeeze(1)
+#    filepath = "C:/Users/CTLab/Documents/George/Arri_analysis_4-29-19/kmeans_data_5-6-19.mat"
+#    if 'mat2' in locals(): print('Yes')
+#    mat2 = hdf5storage.loadmat(filepath)    
+#    x = torch.from_numpy(mat2['X_single'][:,:NUM_FEATURES]) # make 24 -> 21 features as needed
+#    y = torch.from_numpy(mat2['y_label']).long()-1 # convert to long tensor for loss function
+#    y = y.squeeze(1)
+    x, y = load_trainingdata()
     
     m_training = x.size()[0]
+    num_features = x.size()[1]
     num_classes = np.size(np.unique(y))
     classes = ["Artery",
     "Bone",
@@ -297,3 +315,8 @@ def main():
 
 if __name__ == "__main__": 
     main()
+    
+
+## Getting back the objects:
+#with open('arriANN_train_loss.pkl', 'rb') as ff:  
+#    cache_loss = pickle.load(ff)

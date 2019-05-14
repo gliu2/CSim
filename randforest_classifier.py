@@ -49,7 +49,8 @@ x_train = x_train[:, indx_usefulchannels]
 x_test = x_test[:, indx_usefulchannels]
 
 
-#%% 
+#%%  Cross validate over n_estimators parameter
+# Code modified from: https://medium.com/all-things-ai/in-depth-parameter-tuning-for-random-forest-d67bb7e920d
 n_estimators = [1, 2, 4, 8, 16, 32, 64, 100, 200]
 #n_estimators = [1, 2, 4, 8]
 train_results = []
@@ -75,6 +76,34 @@ plt.legend(handler_map={line1: HandlerLine2D(numpoints=2)})
 plt.ylabel('Accuracy')
 plt.xlabel('n_estimators')
 plt.show()
+
+#%% Cross-validate over max_depths parameter
+max_depths = np.linspace(1, 32, 32, endpoint=True)
+train_results = []
+test_results = []
+for max_depth in max_depths:
+    print('Working on max_depth: ', max_depth, ' out of max ', max_depths[-1])
+    start = time.time()
+    rf = RandomForestClassifier(n_estimators=10, max_depth=max_depth, n_jobs=-1)
+    rf.fit(x_train, y_train)
+    train_pred = rf.predict(x_train)
+    train_acc = arriANN.accuracy(y_train.numpy(), train_pred)
+    train_results.append(train_acc)
+    y_pred = rf.predict(x_test)
+    test_acc = arriANN.accuracy(y_test.numpy(), test_pred)
+    test_results.append(test_acc)
+    
+    end = time.time()
+    print('  Time: ', end - start) # seconds
+    
+from matplotlib.legend_handler import HandlerLine2D
+line1, = plt.plot(max_depths[:-1], train_results, 'b', label="Train acc")
+line2, = plt.plot(max_depths[:-1], test_results, 'r', label="Test acc")
+plt.legend(handler_map={line1: HandlerLine2D(numpoints=2)})
+plt.ylabel('Accuracy')
+plt.xlabel('Tree depth')
+plt.show()
+
 
 ##%% Build random forest classifier
 #print('Build classifier...')

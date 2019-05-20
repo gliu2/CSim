@@ -256,3 +256,26 @@ sns.scatterplot(
     alpha=0.3,
     ax=ax3
 )
+
+#%% Visualize 2 resulting dimensions - HIGH RESOLUTION for art of science competition
+df_subset['tsne-2d-one'] = tsne_results[:,0]
+df_subset['tsne-2d-two'] = tsne_results[:,1]
+my_dpi = 96
+#plt.figure(figsize=(16,10))
+plt.figure(figsize=(20, 20), dpi=my_dpi)
+sns.scatterplot(
+    x="tsne-2d-one", y="tsne-2d-two",
+    hue="y",
+    palette=sns.color_palette("hls", 12),
+    data=df_subset,
+#    legend="full",
+    legend=False,
+    alpha=0.3
+)
+plt.xlabel('')
+plt.ylabel('')
+plt.savefig('my_fig.png', dpi=my_dpi*2)
+#L=plt.legend()
+#L.get_texts()[0].set_text('Tissue')
+#for i in range(12):
+#    L.get_texts()[i+1].set_text(classes[i])

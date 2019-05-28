@@ -2,18 +2,14 @@
 """
 Created on Mon May 20 09:53:07 2019
 
-@author: CTLab
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Created on Wed May 15 13:55:09 2019
-
 DATA LOADING AND PROCESSING TUTORIAL
 https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
 
+Before running:
+    -Update CSV file with latest tissue dataset: arritissue_sessions.csv (C:/Users/CTLab/Documents/George/Python_data/arritissue_data)
+
 @author: CTLab
-5-20-19
+5-24-19
 George Liu
 """
 
@@ -24,8 +20,13 @@ import pandas as pd
 from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
+from os import listdir
+from os.path import isfile, join, isdir
+from PIL import Image
+
 
 # Ignore warnings
 import warnings
@@ -33,30 +34,72 @@ warnings.filterwarnings("ignore")
 
 plt.ion()   # interactive mode
 
+# Paths to data and mask folders
 PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
-#%% Let’s quickly read the CSV and get the annotations in an (N, 2) array where N is the number of landmarks.
-landmarks_frame = pd.read_csv(os.path.join(PATH_DATA, 'face_landmarks.csv'))
+PATH_TRAIN = os.path.join(PATH_DATA, 'train/')
+PATH_VAL = os.path.join(PATH_DATA, 'val/')
+PATH_MASK = os.path.join(PATH_DATA, 'masks/')
+PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
 
-n = 65
-img_name = landmarks_frame.iloc[n, 0]
-landmarks = landmarks_frame.iloc[n, 1:].as_matrix()
-landmarks = landmarks.astype('float').reshape(-1, 2)
+classes = ["Artery",
+"Bone",
+"Cartilage",
+"Dura",
+"Fascia",
+"Fat",
+"Muscle",
+"Nerve",
+"Skin",
+"Parotid",
+"PerichondriumWCartilage",
+"Vein"]
+num_classes = len(classes)
 
-print('Image name: {}'.format(img_name))
-print('Landmarks shape: {}'.format(landmarks.shape))
-print('First 4 Landmarks: {}'.format(landmarks[:4]))
+illuminations = ["arriwhite",
+"blue",
+"green",
+"IR",
+"red",
+"violet",
+"white"]
+num_lights = len(illuminations) # 7
+
+#%% Let’s quickly check number of training images per tissue type.
+sessions_frame = pd.read_csv(os.path.join(PATH_DATA, 'arritissue_sessions.csv'))
+
+train_sessions = [f for f in listdir(PATH_TRAIN) if isdir(join(PATH_TRAIN, f))] # Get only folders
+#val_sessions = [f for f in listdir(PATH_VAL) if isdir(join(PATH_VAL, f))]
+num_sessions = len(train_sessions)
+session_tissues = np.zeros((num_sessions, 1))
+for i in range(num_sessions):
+    print('Session: {}'.format(train_sessions[i]))
+    path_sessioni = os.path.join(PATH_TRAIN, train_sessions[i])
+    acquisition_labels = [f for f in listdir(path_sessioni) if isdir(join(path_sessioni, f))] # Get only folders
+    print('Tissue: {}'.format(len(acquisition_labels)))
+    
+    # Check that each tissue acquisition folder contains only 7 images (per illumination) and that they are all TIF
+    for j in range(len(acquisition_labels)):
+        this_folder = os.path.join(path_sessioni, acquisition_labels[j])
+        this_files = listdir(this_folder)
+        this_tiffs = [f for f in os.listdir(this_folder) if f.endswith('.tif')]
+        n_files = len(this_files)
+        n_tiffs = len(this_tiffs)
+        assert n_tiffs==n_files, "Session " + str(train_sessions[i]) + " " + str(acquisition_labels[j]) + " folder contains " + str(n_files) + " files of which only " + str(n_tiffs) + " are tiff."
+        assert n_tiffs==num_lights, "Number of tissue images " + str(n_tiffs) + " is different from number of illumination lights " + str(num_lights)
+#        print('Tissue: {}'.format(acquisition_labels[j]))
+        
+        # Cache number of tissue specimens per session
 
 #%% Let’s write a simple helper function to show an image and its landmarks and use it to show a sample.
 
-def show_landmarks(image, landmarks):
-    """Show image with landmarks"""
-    plt.imshow(image)
-    plt.scatter(landmarks[:, 0], landmarks[:, 1], s=10, marker='.', c='r')
-    plt.pause(0.001)  # pause a bit so that plots are updated
+def show_tissue(image, tissue):
+    """Show image with tissue title"""
+    plt.imshow(image[:,:,:3]) # show white illumination RGB for visualization
+    plt.title(tissue)
 
 plt.figure()
-show_landmarks(io.imread(os.path.join(PATH_DATA, img_name)),
-               landmarks)
+trial_image = mpimg.imread(os.path.join(this_folder, this_tiffs[0]))
+show_tissue(trial_image, acquisition_labels[0])
 plt.show()
 
 #%% Dataset class
@@ -66,9 +109,10 @@ plt.show()
 #__getitem__ to support the indexing such that dataset[i] can be used to get ith sample
 #Let’s create a dataset class for our face landmarks dataset. We will read the csv in __init__ but leave the reading of images to __getitem__. This is memory efficient because all the images are not stored in the memory at once but read as required.
 #
-#Sample of our dataset will be a dict {'image': image, 'landmarks': landmarks}. Our dataset will take an optional argument transform so that any required processing can be applied on the sample. We will see the usefulness of transform in the next section.
-class FaceLandmarksDataset(Dataset):
-    """Face Landmarks dataset."""
+#Sample of our dataset will be a dict {'image': image, 'tissue': tissue type (string)}. Our dataset will take an optional argument transform so that any required processing can be applied on the sample. We will see the usefulness of transform in the next section.
+    
+class ArriTissueDataset(Dataset):
+    """Arriscope tissue dataset."""
 
     def __init__(self, csv_file, root_dir, transform=None):
         """
@@ -78,42 +122,62 @@ class FaceLandmarksDataset(Dataset):
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
-        self.landmarks_frame = pd.read_csv(csv_file)
+        self.sessions_frame = pd.read_csv(csv_file)
         self.root_dir = root_dir
         self.transform = transform
 
     def __len__(self):
-        return len(self.landmarks_frame)
+        return np.count_nonzero(sessions_frame.iloc[:,1:].values)
 
     def __getitem__(self, idx):
-        img_name = os.path.join(self.root_dir,
-                                self.landmarks_frame.iloc[idx, 0])
-        image = io.imread(img_name)
-        landmarks = self.landmarks_frame.iloc[idx, 1:].as_matrix()
-        landmarks = landmarks.astype('float').reshape(-1, 2)
-        sample = {'image': image, 'landmarks': landmarks}
+        # Flat indexing of tissues by acqusition session, skipping missing tissue samples not acquired in some sessions
+        istissue = sessions_frame.iloc[:,1:].values
+        sub_row, sub_col = np.nonzero(istissue)
+#        flat_ind = np.ravel_multi_index(np.nonzero(istissue), np.shape(istissue))
+#        this_row, this_col = np.unravel_index(flat_ind[idx])
+        this_row = sub_row[idx]
+        this_col = sub_col[idx]
+        this_session = sessions_frame.iloc[this_row, 0]
+        this_tissue = sessions_frame.columns[this_col + 1]
+        
+        # Read all 7 tiff narrowband image corresponding to session, concatenating in spectral dimension as 21 channel image
+        this_folder = os.path.join(self.root_dir, str(this_session), this_tissue)
+        this_tiffs = [f for f in os.listdir(this_folder) if f.endswith('.tif')]
+        n_tiffs = len(this_tiffs)
+        # Check that there are only 7 tiff images (for 7 illumination conditions)
+        assert n_tiffs==num_lights, "Number of tissue TIFF images " + str(n_tiffs) + " is different from number of illumination lights " + str(num_lights)
+        
+        image = np.nan
+        for img_name in this_tiffs:
+            this_image = mpimg.imread(os.path.join(this_folder, img_name))
+            if np.isnan(np.sum(image)): # no concatenation necessary for 1st image
+                image = this_image
+            else:
+                image = np.concatenate((image, this_image), axis = 2)
+                
+        sample = {'image': image, 'tissue': this_tissue}
 
         if self.transform:
+            # TODO: add crop to mask
             sample = self.transform(sample)
 
         return sample
 
 #%% instantiate this class and iterate through the data samples. We will print the sizes of first 4 samples and show their landmarks.
-face_dataset = FaceLandmarksDataset(csv_file=os.path.join(PATH_DATA, 'face_landmarks.csv'),
-                                    root_dir=PATH_DATA)
+tissue_dataset = ArriTissueDataset(csv_file=PATH_CSV, root_dir=PATH_TRAIN)
 
 fig = plt.figure()
 
-for i in range(len(face_dataset)):
-    sample = face_dataset[i]
+for i in range(len(tissue_dataset)):
+    sample = tissue_dataset[i]
 
-    print(i, sample['image'].shape, sample['landmarks'].shape)
+    print(i, sample['image'].shape, sample['tissue'])
 
     ax = plt.subplot(1, 4, i + 1)
     plt.tight_layout()
-    ax.set_title('Sample #{}'.format(i))
+    ax.set_title('Sample #{}: {}'.format(i, sample['tissue']))
     ax.axis('off')
-    show_landmarks(**sample)
+    show_tissue(**sample)
 
     if i == 3:
         plt.show()
@@ -144,7 +208,7 @@ class Rescale(object):
         self.output_size = output_size
 
     def __call__(self, sample):
-        image, landmarks = sample['image'], sample['landmarks']
+        image, tissue = sample['image'], sample['tissue']
 
         h, w = image.shape[:2]
         if isinstance(self.output_size, int):
@@ -217,21 +281,20 @@ class ToTensor(object):
 #
 #Let’s say we want to rescale the shorter side of the image to 256 and then randomly crop a square of size 224 from it. 
 # i.e, we want to compose Rescale and RandomCrop transforms. torchvision.transforms.Compose is a simple callable class which allows us to do this.
-scale = Rescale(256)
-crop = RandomCrop(128)
-composed = transforms.Compose([Rescale(256),
-                               RandomCrop(224)])
+scale = Rescale((1080, 1920))
+crop = RandomCrop(32)
+composed = transforms.Compose([scale, crop])
 
 # Apply each of the above transforms on sample.
 fig = plt.figure()
-sample = face_dataset[65]
+sample = tissue_dataset[63]
 for i, tsfrm in enumerate([scale, crop, composed]):
     transformed_sample = tsfrm(sample)
 
     ax = plt.subplot(1, 3, i + 1)
     plt.tight_layout()
     ax.set_title(type(tsfrm).__name__)
-    show_landmarks(**transformed_sample)
+    show_tissue(**transformed_sample)
 
 plt.show()
 

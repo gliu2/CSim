@@ -20,7 +20,7 @@ optional arguments:
 **Install beforehand:
     pip install wget
 ** Run in terminal to use parser: (with csv in current directory)
-    python labelboxdl.py --src export-2019-05-20T17_43_06.620Z.csv
+    python labelboxdl.py --src export-2019-05-30T17_59_48.883Z.csv
 
 
 @author: CTLab

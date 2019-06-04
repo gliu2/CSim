@@ -35,9 +35,9 @@ def densenet_40_12_bc(pretrained=False, requires_grad=False, **kwargs):
         model.load_state_dict(checkpoint['state_dict'])
         model.requires_grad = requires_grad
    
-    # Removing linear layer
-    removed = list(model.children())[:-1]
-    model= torch.nn.Sequential(*removed)
+#    # Removing linear layer
+#    removed = list(model.children())[:-1]
+#    model= torch.nn.Sequential(*removed)
     
     return model
     

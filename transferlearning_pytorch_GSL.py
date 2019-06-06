@@ -66,6 +66,7 @@ data_transforms = {
         dataloading_arriGSL.RandomCropInSegmentation(32),
         dataloading_arriGSL.ToTensor(),
         dataloading_arriGSL.ImageStandardizePerImage()
+#        dataloading_arriGSL.ImageStandardizePerDataset()
 #        transforms.RandomResizedCrop(224),
 #        transforms.RandomHorizontalFlip(),
 #        transforms.ToTensor(),
@@ -77,6 +78,7 @@ data_transforms = {
         dataloading_arriGSL.RandomCropInSegmentation(32),
         dataloading_arriGSL.ToTensor(),
         dataloading_arriGSL.ImageStandardizePerImage()
+#        dataloading_arriGSL.ImageStandardizePerDataset()
 #        transforms.ToTensor(),
 #        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
@@ -140,11 +142,30 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #Let’s visualize a few training images so as to understand the data augmentations.
 def imshow(inp, title=None):
     """Imshow for Tensor."""
+    # Undo per-image normalization
+    print("Input image is of type {}".format(inp.dtype))
     inp = inp.numpy().transpose((1, 2, 0))
-#    mean = np.array([0.485, 0.456, 0.406])
-#    std = np.array([0.229, 0.224, 0.225])
+    mean = np.array(np.mean(inp, axis=(0,1)))
+    std = np.array(np.std(inp, axis=(0,1)))
+    inp = std * inp + mean
+#    inp = inp.astype(np.float64)
+#    inp = np.clip(inp, 0, 1)
+    print("Shown image is of type {}".format(inp.dtype))
+    
+#    # Apply per-image normalization to verify normalization transform accuracy
+#    inp = inp.numpy().transpose((1, 2, 0))
+#    mean = np.array(np.mean(inp, axis=(0,1)))
+#    std = np.array(np.std(inp, axis=(0,1)))
+#    inp = (inp - mean)/std
+#    inp = np.clip(inp, 0, 1)
+    
+    # Undo per-batch normalization
+#    inp = inp.numpy().transpose((1, 2, 0))
+#    mean = MEAN_CHANNEL_PIXELVALS
+#    std = STD_CHANNEL_PIXELVALS
 #    inp = std * inp + mean
 #    inp = np.clip(inp, 0, 1)
+    
     plt.imshow(inp)
     if title is not None:
         plt.title(title)
@@ -275,6 +296,9 @@ def visualize_model(model, num_images=6):
 #                imshow((out * 255).astype(np.uint8))
 #                imshow(out)
                 imshow(inputs_orig.data[j, :3, :, :])
+                print('Visualizing image {} max val {}, {}, {} and min val {}, {}, {}'.format(j, 
+                        torch.max(inputs_orig.data[j, 0, :, :]), torch.max(inputs_orig.data[j, 1, :, :]), torch.max(inputs_orig.data[j, 2, :, :]),
+                        torch.min(inputs_orig.data[j, 0, :, :]), torch.min(inputs_orig.data[j, 1, :, :]), torch.min(inputs_orig.data[j, 2, :, :])))
 
                 if images_so_far == num_images:
                     model.train(mode=was_training)

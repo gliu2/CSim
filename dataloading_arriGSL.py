@@ -485,19 +485,39 @@ class ImageStandardizePerImage(object):
         image, tissue = sample['image'], sample['tissue']
         
         if type(image) == torch.Tensor:
-            # Ensure image is float tensor type to calculate standard deviation, uint8 for val data throws error
-            if not (image.dtype==torch.float or image.dtype==torch.float64):
-                image = image.type(torch.float64)
-            assert image.dtype==torch.float or image.dtype==torch.float64, "Image dtype is " + str(image.dtype) + " but expected torch.float32 or torch.float64 for torch.std"
+            inp = image.numpy().transpose((1, 2, 0))
+            mean = np.array(np.mean(inp, axis=(0,1)))
+            std = np.array(np.std(inp, axis=(0,1)))
+            inp = (inp - mean)/std
+            normalized_image = torch.from_numpy(inp.transpose((2, 0, 1)))
             
-            image_std = torch.zeros(image.size())
-            for i in np.arange(image.size()[0]):
-                image_std[i,:,:] = torch.std(image[i,:,:])
-            image_std = image_std.type(image.type()) # match data type of image for division
-            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(image_std) # C X H X W
-#            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(torch.std(image, dim=(1,2), keepdim=True)) # C X H X W
+#            # Undo normalization
+#            inp2 = normalized_image.numpy().transpose((1, 2, 0))
+#            normalized_image = std * inp2 + mean
+#            normalized_image = torch.from_numpy(inp2.transpose((2, 0, 1)))
+#            print("Input image of type {}. Numpy image is of type {}. Normalized image is of type {}".format(image.dtype, inp.dtype, normalized_image.dtype))
+            
+             # Normalization method using all Tensor variables intermediate
+#            # Ensure image is float tensor type to calculate standard deviation, uint8 for val data throws error
+#            if not (image.dtype==torch.float or image.dtype==torch.float64):
+#                image = image.type(torch.float64)
+#            assert image.dtype==torch.float or image.dtype==torch.float64, "Image dtype is " + str(image.dtype) + " but expected torch.float32 or torch.float64 for torch.std"
+#            
+#            image_std = torch.zeros(image.size())
+#            for i in np.arange(image.size()[0]):
+#                image_std[i,:,:] = torch.std(image[i,:,:])
+#            image_std = image_std.type(image.type()) # match data type of image for division
+#            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(image_std) # C X H X W
+##            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(torch.std(image, dim=(1,2), keepdim=True)) # C X H X W
         else:
-            normalized_image = (image - np.mean(image, axis=(0,1))) / np.std(image, axis=(0,1))
+            mean = np.array(np.mean(image, axis=(0,1)))
+            std = np.array(np.std(image, axis=(0,1)))
+            normalized_image = (image - mean) / std
+            
+#            # Undo normalization
+#            normalized_image = std * normalized_image + mean
+#            normalized_image = normalized_image.astype(image.dtype)
+            print("Input image of type {}. Normalized image is of type {}".format(image.dtype, normalized_image.dtype))
             
         sample['image'] = normalized_image
         
@@ -580,6 +600,23 @@ def show_landmarks_batch(sample_batched):
 #        plt.title(tissueclass_int2str(tissues_batch.numpy())[i])
         plt.title(tissues_batch.numpy())
 
+# Helper function to plot histograms of image pixel data per RGB channels
+def show_histogram_RGBchannels(image):
+    image_r = image.data[0,:,:].flatten()
+    image_g = image.data[1,:,:].flatten()
+    image_b = image.data[2,:,:].flatten()
+    
+    plt.figure()
+    rgbcolors = ['r', 'g', 'b']
+#        plt.hist([image_r, image_g, image_b], bins='auto', color=rgbcolors) # histogram plot side-by-side
+    plt.hist(image_r, bins='auto', alpha=0.5, label='R', color=rgbcolors[0])
+    plt.hist(image_g, bins='auto', alpha=0.5, label='G', color=rgbcolors[1])
+    plt.hist(image_b, bins='auto', alpha=0.5, label='B', color=rgbcolors[2])
+    plt.legend(loc='upper right')
+    plt.ylabel('Count')
+    plt.xlabel('Pixel value')
+    plt.show()
+    
 
 def main():
     
@@ -730,6 +767,14 @@ def main():
         sample = transformed_dataset[i]
     
         print(i, sample['image'].size(), sample['tissue'])
+        
+        image = sample['image']
+        print('Max val {}, {}, {} and min val {}, {}, {}'.format(
+            torch.max(image.data[0, :, :]), torch.max(image.data[1, :, :]), torch.max(image.data[2, :, :]),
+            torch.min(image.data[0, :, :]), torch.min(image.data[1, :, :]), torch.min(image.data[2, :, :])))
+        
+        # Plot histogram of pixel values after normalization
+        show_histogram_RGBchannels(image)
     
         if i == 3:
             break

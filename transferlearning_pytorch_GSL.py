@@ -28,27 +28,30 @@ import densenet_av
 
 plt.ion()   # interactive mode
 
-# Paths to data and mask folders
-PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
-PATH_TRAIN = os.path.join(PATH_DATA, 'train/')
-PATH_VAL = os.path.join(PATH_DATA, 'val/')
-PATH_MASK = os.path.join(PATH_DATA, 'masks/')
-PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
-PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
+## Paths to data and mask folders
+#PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
+#PATH_TRAIN = os.path.join(PATH_DATA, 'train/')
+#PATH_VAL = os.path.join(PATH_DATA, 'val/')
+#PATH_MASK = os.path.join(PATH_DATA, 'masks/')
+#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
+#PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
 
-myclasses = ["Artery",
-"Bone",
-"Cartilage",
-"Dura",
-"Fascia",
-"Fat",
-"Muscle",
-"Nerve",
-"Parotid",
-"PerichondriumWCartilage",
-"Skin",
-"Vein"]
-num_classes = len(myclasses)
+#myclasses = ["Artery",
+#"Bone",
+#"Cartilage",
+#"Dura",
+#"Fascia",
+#"Fat",
+#"Muscle",
+#"Nerve",
+#"Parotid",
+#"PerichondriumWCartilage",
+#"Skin",
+#"Vein"]
+#myclasses = [
+#"Fascia",
+#"Muscle"]
+#num_classes = len(myclasses)
 
 #%% Data loading
 #We will use torchvision and torch.utils.data packages for loading the data.
@@ -65,54 +68,29 @@ data_transforms = {
         dataloading_arriGSL.RandomResizeSegmentation(),
         dataloading_arriGSL.RandomCropInSegmentation(32),
         dataloading_arriGSL.ToTensor(),
-        dataloading_arriGSL.ImageStandardizePerImage()
-#        dataloading_arriGSL.ImageStandardizePerDataset()
-#        transforms.RandomResizedCrop(224),
-#        transforms.RandomHorizontalFlip(),
-#        transforms.ToTensor(),
-#        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+#        dataloading_arriGSL.ImageStandardizePerImage()
+        dataloading_arriGSL.ImageStandardizePerDataset()
     ]),
     'val': dataloading_arriGSL.ComposedTransform([
-#        transforms.Resize(256),
-#        transforms.CenterCrop(224),
         dataloading_arriGSL.RandomCropInSegmentation(32),
         dataloading_arriGSL.ToTensor(),
-        dataloading_arriGSL.ImageStandardizePerImage()
-#        dataloading_arriGSL.ImageStandardizePerDataset()
-#        transforms.ToTensor(),
-#        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+#        dataloading_arriGSL.ImageStandardizePerImage()
+        dataloading_arriGSL.ImageStandardizePerDataset()
     ]),
 }
-#data_transforms = {
-#    'train': transforms.Compose([
-#        dataloading_arriGSL.RandomResize(),
-#        dataloading_arriGSL.RandomCrop(32),
-#        dataloading_arriGSL.ToTensor()
-##        transforms.RandomResizedCrop(224),
-##        transforms.RandomHorizontalFlip(),
-##        transforms.ToTensor(),
-##        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-#    ]),
-#    'val': transforms.Compose([
-##        transforms.Resize(256),
-##        transforms.CenterCrop(224),
-#        dataloading_arriGSL.RandomCrop(32),
-#        dataloading_arriGSL.ToTensor()
-##        transforms.ToTensor(),
-##        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-#    ]),
-#}
 
+
+# Datasets
 transformed_dataset_train = dataloading_arriGSL.ArriTissueDataset(csv_file=PATH_CSV, root_dir=PATH_TRAIN, mask_dir=PATH_MASK,
                                            transform=data_transforms['train'])
 
 transformed_dataset_val = dataloading_arriGSL.ArriTissueDataset(csv_file=PATH_CSV_VAL, root_dir=PATH_VAL, mask_dir=PATH_MASK,
                                            transform=data_transforms['val'])
     
-dataloader_train = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=7,
+dataloader_train = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=len(transformed_dataset_train),
                         shuffle=True, num_workers=4)
 
-dataloader_val = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=7,
+dataloader_val = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=len(transformed_dataset_val),
                         shuffle=True, num_workers=4)
     
 dataloaders = {'train': dataloader_train, 'val': dataloader_val}
@@ -144,13 +122,9 @@ def imshow(inp, title=None):
     """Imshow for Tensor."""
     # Undo per-image normalization
     print("Input image is of type {}".format(inp.dtype))
-    inp = inp.numpy().transpose((1, 2, 0))
-    mean = np.array(np.mean(inp, axis=(0,1)))
-    std = np.array(np.std(inp, axis=(0,1)))
-    inp = std * inp + mean
-#    inp = inp.astype(np.float64)
-#    inp = np.clip(inp, 0, 1)
-    print("Shown image is of type {}".format(inp.dtype))
+    inp = dataloading_arriGSL.transform_denormalizeperdataset(inp)
+    inp = inp.numpy().transpose((1,2,0)) # torch tensor -> numpy
+    print("Shown image is of type {}, shape {}".format(inp.dtype, np.shape(inp)))
     
 #    # Apply per-image normalization to verify normalization transform accuracy
 #    inp = inp.numpy().transpose((1, 2, 0))
@@ -290,15 +264,15 @@ def visualize_model(model, num_images=6):
                 images_so_far += 1
                 ax = plt.subplot(num_images//2, 2, images_so_far)
                 ax.axis('off')
-                ax.set_title('predicted: {}'.format(class_names[preds[j]]))
+                ax.set_title('predicted: {}, true: {}'.format(class_names[preds[j]], class_names[labels[j]]))
 #                imshow(inputs.cpu().data[j])
 #                out = inputs[:, :3, :, :].cpu().data[j].numpy()
 #                imshow((out * 255).astype(np.uint8))
 #                imshow(out)
                 imshow(inputs_orig.data[j, :3, :, :])
-                print('Visualizing image {} max val {}, {}, {} and min val {}, {}, {}'.format(j, 
-                        torch.max(inputs_orig.data[j, 0, :, :]), torch.max(inputs_orig.data[j, 1, :, :]), torch.max(inputs_orig.data[j, 2, :, :]),
-                        torch.min(inputs_orig.data[j, 0, :, :]), torch.min(inputs_orig.data[j, 1, :, :]), torch.min(inputs_orig.data[j, 2, :, :])))
+#                print('Visualizing image {} max val {}, {}, {} and min val {}, {}, {}'.format(j, 
+#                        torch.max(inputs_orig.data[j, 0, :, :]), torch.max(inputs_orig.data[j, 1, :, :]), torch.max(inputs_orig.data[j, 2, :, :]),
+#                        torch.min(inputs_orig.data[j, 0, :, :]), torch.min(inputs_orig.data[j, 1, :, :]), torch.min(inputs_orig.data[j, 2, :, :])))
 
                 if images_so_far == num_images:
                     model.train(mode=was_training)
@@ -327,7 +301,7 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 #%% Train and evaluate
 #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
 model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                       num_epochs=25)
+                       num_epochs=100)
 
 visualize_model(model_ft)
 

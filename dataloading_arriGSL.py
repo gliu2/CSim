@@ -28,6 +28,7 @@ from os import listdir
 from os.path import isfile, join, isdir
 from PIL import Image
 import time
+from operator import itemgetter
 
 
 # Ignore warnings
@@ -43,6 +44,8 @@ PATH_VAL = os.path.join(PATH_DATA, 'val/')
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
 PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
 PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
+#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_2class.csv')
+#PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_2class.csv')
 
 myclasses = ["Artery",
 "Bone",
@@ -56,6 +59,10 @@ myclasses = ["Artery",
 "PerichondriumWCartilage",
 "Skin",
 "Vein"]
+#myclasses = [
+#"Fascia",
+#"Muscle"
+#]
 num_classes = len(myclasses)
 
 illuminations = ["arriwhite",
@@ -194,6 +201,7 @@ class ArriTissueDataset(Dataset):
     def __getitem__(self, idx):
         # Flat indexing of tissues by acqusition session, skipping missing tissue samples not acquired in some sessions
         istissue = self.sessions_frame.iloc[:,1:].values
+#        istissue = self.sessions_frame.iloc[:,[5,7]].values # 2-class problem of muscle vs fascia
         sub_row, sub_col = np.nonzero(istissue)
 #        flat_ind = np.ravel_multi_index(np.nonzero(istissue), np.shape(istissue))
 #        this_row, this_col = np.unravel_index(flat_ind[idx])
@@ -254,6 +262,26 @@ class ArriTissueDataset(Dataset):
 #tsfm = Transform(params)
 #transformed_sample = tsfm(sample)
 #Observe below how these transforms had to be applied both on the image and landmarks.
+        
+def torchresize_preservedtype(image, output_size):
+    """Rescale the image and preserve original image datatype and pixel range.
+
+    Args:
+        output_size (tuple): Desired output size. Output is
+            matched to output_size. 
+    """
+    (new_h, new_w) = output_size
+    if image.dtype=='float32' or image.dtype=='float64':
+        img = transform.resize(image, (new_h, new_w))
+    else:
+        info = np.iinfo(image.dtype) # Get the information of the incoming image type
+        img = transform.resize(image, (new_h, new_w)) # converts image to dtype float64 in range [0, 1.0]
+        img = info.max * img # Now scale by maximum of original dtype
+        img = img.astype(info.dtype)
+        
+    return img
+    
+
 class Rescale(object):
     """Rescale the image in a sample to a given size.
 
@@ -281,7 +309,8 @@ class Rescale(object):
 
         new_h, new_w = int(new_h), int(new_w)
 
-        img = transform.resize(image, (new_h, new_w))
+#        img = transform.resize(image, (new_h, new_w))
+        img = torchresize_preservedtype(image, (new_h, new_w))
 
         return {'image': img, 'tissue': tissue}
     
@@ -366,8 +395,11 @@ class RandomResizeSegmentation(object):
 
         new_h, new_w = int(new_h), int(new_w)
 
-        img = transform.resize(image, (new_h, new_w))
-        segmentation = transform.resize(segmentation, (new_h, new_w))
+#        img = transform.resize(image, (new_h, new_w))
+#        segmentation = transform.resize(segmentation, (new_h, new_w))
+        
+        img = torchresize_preservedtype(image, (new_h, new_w))
+        segmentation = torchresize_preservedtype(segmentation, (new_h, new_w))
 
         return {'image': img, 'tissue': tissue}, segmentation
 
@@ -405,7 +437,7 @@ class RandomCropInSegmentation(object):
             mid_row = top + new_h//2
             mid_col = left + new_w//2
             
-            insegmentation = segmentation[mid_row, mid_col]==1
+            insegmentation = segmentation[mid_row, mid_col] > 0
             
             # Throw error if in infinite loop
             counter += 1
@@ -471,7 +503,7 @@ class ImageStandardizePerDataset(object):
             
         sample['image'] = normalized_image
         
-        return sample, 
+        return sample, segmentation
     
 class ImageStandardizePerImage(object):
     """Normalize each Torch tensor image using pre-computed mean and standard deviation of all pixel values per channel per image 6-5-19.
@@ -513,6 +545,95 @@ class ImageStandardizePerImage(object):
             mean = np.array(np.mean(image, axis=(0,1)))
             std = np.array(np.std(image, axis=(0,1)))
             normalized_image = (image - mean) / std
+            
+#            # Undo normalization
+#            normalized_image = std * normalized_image + mean
+#            normalized_image = normalized_image.astype(image.dtype)
+            print("Input image of type {}. Normalized image is of type {}".format(image.dtype, normalized_image.dtype))
+            
+        sample['image'] = normalized_image
+        
+        return sample, segmentation
+    
+class ImageUnstandardizePerDataset(object):
+    """Un-Normalize each Torch tensor image using pre-computed mean and standard deviation of all pixel values per channel across training dataset 6-5-19.
+
+    Args:
+        means (numpy rank2 array): mean pixel value per channel
+        stds (numpy rank2 array): standard deviation of pixel values per channel
+
+    """    
+    
+    def __init__(self, means=MEAN_CHANNEL_PIXELVALS, stds=STD_CHANNEL_PIXELVALS):
+        self.channel_means = means
+        self.channel_stds = stds
+
+    def __call__(self, sample, segmentation):
+        image, tissue = sample['image'], sample['tissue']
+        
+        if type(image) == torch.Tensor:
+            im_tensortype = image.type()
+            channel_means_torch = torch.from_numpy(self.channel_means).type(im_tensortype)
+            channel_stds_torch = torch.from_numpy(self.channel_stds).type(im_tensortype)
+            
+            # Match channel means and std to number of channels in image
+            C = image.size()[0]
+            channel_means_torch = channel_means_torch[0:C]
+            channel_stds_torch = channel_stds_torch[0:C]
+            
+            # swap color axis to ensure broadcast same dimensions in last dimension
+            # numpy image: H x W x C
+            # torch image: C X H X W
+            image_whc = torch.transpose(image, 0, 2) # C X H X W  -> H x W x C
+            normalized_image_whc = torch.mul(image_whc, channel_stds_torch). add(channel_means_torch)
+            normalized_image = torch.transpose(normalized_image_whc, 0, 2) # C X H X W
+        else:
+            normalized_image = (image * self.channel_stds) + self.channel_means
+            
+        sample['image'] = normalized_image
+        
+        return sample, segmentation
+    
+class ImageUnstandardizePerImage(object):
+    """De-Normalize each Torch tensor image using pre-computed mean and standard deviation of all pixel values per channel per image 6-5-19.
+
+    Args:
+        means (numpy rank2 array): mean pixel value per channel
+        stds (numpy rank2 array): standard deviation of pixel values per channel
+
+    """    
+    def __call__(self, sample, segmentation):
+        image, tissue = sample['image'], sample['tissue']
+        
+        if type(image) == torch.Tensor:
+            inp = image.numpy().transpose((1, 2, 0))
+            mean = np.array(np.mean(inp, axis=(0,1)))
+            std = np.array(np.std(inp, axis=(0,1)))
+            inp = (inp * std) + mean
+            normalized_image = torch.from_numpy(inp.transpose((2, 0, 1)))
+            
+#            # Undo normalization
+#            inp2 = normalized_image.numpy().transpose((1, 2, 0))
+#            normalized_image = std * inp2 + mean
+#            normalized_image = torch.from_numpy(inp2.transpose((2, 0, 1)))
+#            print("Input image of type {}. Numpy image is of type {}. Normalized image is of type {}".format(image.dtype, inp.dtype, normalized_image.dtype))
+            
+             # Normalization method using all Tensor variables intermediate
+#            # Ensure image is float tensor type to calculate standard deviation, uint8 for val data throws error
+#            if not (image.dtype==torch.float or image.dtype==torch.float64):
+#                image = image.type(torch.float64)
+#            assert image.dtype==torch.float or image.dtype==torch.float64, "Image dtype is " + str(image.dtype) + " but expected torch.float32 or torch.float64 for torch.std"
+#            
+#            image_std = torch.zeros(image.size())
+#            for i in np.arange(image.size()[0]):
+#                image_std[i,:,:] = torch.std(image[i,:,:])
+#            image_std = image_std.type(image.type()) # match data type of image for division
+#            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(image_std) # C X H X W
+##            normalized_image = torch.sub(image, torch.mean(image, dim=(1,2), keepdim=True)).div(torch.std(image, dim=(1,2), keepdim=True)) # C X H X W
+        else:
+            mean = np.array(np.mean(image, axis=(0,1)))
+            std = np.array(np.std(image, axis=(0,1)))
+            normalized_image = (image * std) + mean
             
 #            # Undo normalization
 #            normalized_image = std * normalized_image + mean
@@ -577,6 +698,17 @@ class getMeanStd(object):
         return sample_stats, segmentation
 #        return im_means, im_stds    
     
+def transform_denormalizeperdataset(image):
+    """Stand alone transform to Un-Normalize image per dataset.
+    
+    Args:
+        image: tensor (RGB or 21 channel) or numpy (21 channel) image to denormalize
+    """ 
+    denormalize_transform =  ImageUnstandardizePerDataset()
+    sample = {'image': image, 'tissue': None}
+
+    return denormalize_transform(sample, [])[0]['image']
+    
            
 #%% However, we are losing a lot of features by using a simple for loop to iterate over the data. In particular, we are missing out on:
 #
@@ -599,6 +731,7 @@ def show_landmarks_batch(sample_batched):
 ##        plt.title(tissues_batch)
 #        plt.title(tissueclass_int2str(tissues_batch.numpy())[i])
         plt.title(tissues_batch.numpy())
+        plt.title(itemgetter(*tissues_batch)(myclasses))
 
 # Helper function to plot histograms of image pixel data per RGB channels
 def show_histogram_RGBchannels(image):
@@ -704,9 +837,11 @@ def main():
 #    composed = transforms.Compose([randomrescale, crop])
     randomrescale = RandomResizeSegmentation()
     crop = RandomCropInSegmentation(32)
-#    normalize = ImageStandardizePerDataset()
-    normalize = ImageStandardizePerImage()
-    composed = ComposedTransform([randomrescale, crop, normalize])
+    normalize = ImageStandardizePerDataset()
+    denormalize = ImageUnstandardizePerDataset()
+#    normalize = ImageStandardizePerImage()
+#    denormalize = ImageUnstandardizePerImage()
+    composed = ComposedTransform([randomrescale, crop, normalize, denormalize])
     
 #    # PyTorch Vision Transforms only work on PILLOW (PIL) images, not good for multichannel (>3) images! 
 #    crop2 = transforms.RandomCrop(32)
@@ -736,7 +871,7 @@ def main():
 #        transformed_sample =  {'image': tsfrm_image, 'tissue': sample['tissue']}
     
         ax = plt.subplot(1, len(list_tsfrms), i + 1)
-        plt.tight_layout()
+#        plt.tight_layout()
         show_tissue(**transformed_sample)
         ax.set_title(type(tsfrm).__name__)
     
@@ -759,24 +894,25 @@ def main():
                                                    RandomResizeSegmentation(),
                                                    RandomCropInSegmentation(32),
                                                    ToTensor(),
-#                                                   ImageStandardizePerDataset()
-                                                   ImageStandardizePerImage()
+                                                   normalize,
+#                                                   denormalize
+#                                                   ImageStandardizePerImage()
                                                ]))
     
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
     
-        print(i, sample['image'].size(), sample['tissue'])
+        print(i, sample['image'].size(), myclasses[sample['tissue']])
         
         image = sample['image']
-        print('Max val {}, {}, {} and min val {}, {}, {}'.format(
-            torch.max(image.data[0, :, :]), torch.max(image.data[1, :, :]), torch.max(image.data[2, :, :]),
-            torch.min(image.data[0, :, :]), torch.min(image.data[1, :, :]), torch.min(image.data[2, :, :])))
+#        print('Max val {}, {}, {} and min val {}, {}, {}'.format(
+#            torch.max(image.data[0, :, :]), torch.max(image.data[1, :, :]), torch.max(image.data[2, :, :]),
+#            torch.min(image.data[0, :, :]), torch.min(image.data[1, :, :]), torch.min(image.data[2, :, :])))
         
         # Plot histogram of pixel values after normalization
         show_histogram_RGBchannels(image)
     
-        if i == 3:
+        if i == 13:
             break
         
     #%% Use torch.utils.data.DataLoader is an iterator which provides all these features. Parameters used below should be clear. One parameter of interest is collate_fn. You can specify how exactly the samples need to be batched using collate_fn. However, default collate should work fine for most use cases.
@@ -789,7 +925,7 @@ def main():
         print('Time elapsed: {} seconds'.format(time.time()-time_start))
         
         print(i_batch, sample_batched['image'].size(),
-              sample_batched['tissue'])
+              itemgetter(*sample_batched['tissue'])(myclasses))
     
         # observe 4th batch and stop.
         if i_batch == 3:

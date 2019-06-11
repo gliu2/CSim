@@ -42,27 +42,29 @@ PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
 PATH_TRAIN = os.path.join(PATH_DATA, 'train/')
 PATH_VAL = os.path.join(PATH_DATA, 'val/')
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
-PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
-PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
-#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_2class.csv')
-#PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_2class.csv')
+#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
+#PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
+PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_4class.csv')
+PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_4class.csv')
 
-myclasses = ["Artery",
+#myclasses = ["Artery",
+#"Bone",
+#"Cartilage",
+#"Dura",
+#"Fascia",
+#"Fat",
+#"Muscle",
+#"Nerve",
+#"Parotid",
+#"PerichondriumWCartilage",
+#"Skin",
+#"Vein"]
+myclasses = [
 "Bone",
-"Cartilage",
-"Dura",
 "Fascia",
 "Fat",
-"Muscle",
-"Nerve",
-"Parotid",
-"PerichondriumWCartilage",
-"Skin",
-"Vein"]
-#myclasses = [
-#"Fascia",
-#"Muscle"
-#]
+"Muscle"
+]
 num_classes = len(myclasses)
 
 illuminations = ["arriwhite",
@@ -272,10 +274,10 @@ def torchresize_preservedtype(image, output_size):
     """
     (new_h, new_w) = output_size
     if image.dtype=='float32' or image.dtype=='float64':
-        img = transform.resize(image, (new_h, new_w))
+        img = transform.resize(image, (new_h, new_w), clip=False) # don't clip so negative values can be recovered after de-normalization
     else:
         info = np.iinfo(image.dtype) # Get the information of the incoming image type
-        img = transform.resize(image, (new_h, new_w)) # converts image to dtype float64 in range [0, 1.0]
+        img = transform.resize(image, (new_h, new_w), clip=False) # converts image to dtype float64 in range [0, 1.0]
         img = info.max * img # Now scale by maximum of original dtype
         img = img.astype(info.dtype)
         

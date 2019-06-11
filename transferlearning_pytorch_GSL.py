@@ -87,10 +87,10 @@ transformed_dataset_train = dataloading_arriGSL.ArriTissueDataset(csv_file=PATH_
 transformed_dataset_val = dataloading_arriGSL.ArriTissueDataset(csv_file=PATH_CSV_VAL, root_dir=PATH_VAL, mask_dir=PATH_MASK,
                                            transform=data_transforms['val'])
     
-dataloader_train = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=len(transformed_dataset_train),
+dataloader_train = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=8,
                         shuffle=True, num_workers=4)
 
-dataloader_val = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=len(transformed_dataset_val),
+dataloader_val = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=8,
                         shuffle=True, num_workers=4)
     
 dataloaders = {'train': dataloader_train, 'val': dataloader_val}
@@ -171,6 +171,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
 
+    cache_loss = {'train': [], 'val': []}
+    cache_acc = {'train': [], 'val': []}
+    
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -222,6 +225,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
+            # Save losses to plot learning curve
+            cache_loss[phase].append((epoch, epoch_loss))
+            cache_acc[phase].append((epoch, epoch_acc))
+
             # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
@@ -236,7 +243,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
     # load best model weights
     model.load_state_dict(best_model_wts)
-    return model
+    return model, cache_loss, cache_acc
 
 #%% Visualize model predictions
 #    Generic function to display predictions for a few images
@@ -300,12 +307,40 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
 #%% Train and evaluate
 #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                       num_epochs=100)
+NUM_EPOCHS = 25
+model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                       num_epochs=NUM_EPOCHS)
 
 visualize_model(model_ft)
 
 
+
+#%% 6-11-19: Plot learning curve
+
+# Losses
+randomguess_loss = np.log(len(class_names))
+for phase in ['train', 'val']:
+    t_size, losses = zip(*cache_loss[phase])
+    plt.plot(t_size, losses)
+plt.hlines(randomguess_loss, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
+#plt.axis([0, NUM_EPOCHS, 0, 1])
+plt.title('Learning curve, classes=' + str(class_names))
+plt.xlabel('Epoch #')
+plt.ylabel('Cross-entropy loss')
+plt.legend(['train', 'val', 'random guess'])
+plt.show()
+
+# Acc
+randomguess_acc = 1/len(class_names)
+for phase in ['train', 'val']:
+    t_size, acc = zip(*cache_acc[phase])
+    plt.plot(t_size, acc)
+plt.hlines(randomguess_acc, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
+plt.title('Learning curve, classes=' + str(class_names))
+plt.xlabel('Epoch #')
+plt.ylabel('Accuracy')
+plt.legend(['train', 'val', 'random guess'])
+plt.show()
 
 #%% ConvNet as fixed feature extractor
 #Here, we need to freeze all the network except the final layer. We need to set requires_grad == False to freeze the parameters so that the gradients are not computed in backward().

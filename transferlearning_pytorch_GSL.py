@@ -23,6 +23,8 @@ import matplotlib.pyplot as plt
 import time
 import os
 import copy
+import random
+import math
 import dataloading_arriGSL
 import densenet_av
 
@@ -165,7 +167,7 @@ imshow(out, title=[class_names[x] for x in classes])
 #Scheduling the learning rate
 #Saving the best model
 #In the following, parameter scheduler is an LR scheduler object from torch.optim.lr_scheduler.
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, criterion, optimizer, scheduler, num_epochs=25, verbose=True):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -175,8 +177,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     cache_acc = {'train': [], 'val': []}
     
     for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
+        if verbose:
+            print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+            print('-' * 10)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
@@ -222,8 +225,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
-                phase, epoch_loss, epoch_acc))
+            if verbose:
+                print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                    phase, epoch_loss, epoch_acc))
 
             # Save losses to plot learning curve
             cache_loss[phase].append((epoch, epoch_loss))
@@ -233,8 +237,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
-
-        print()
+        
+        if verbose:
+            print()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -286,6 +291,35 @@ def visualize_model(model, num_images=6):
                     return
         model.train(mode=was_training)
         
+#%% 6-11-19: Plot Learning curve
+def learning_curve(cache_loss, cache_acc):
+    # Losses
+    randomguess_loss = np.log(len(class_names))
+    for phase in ['train', 'val']:
+        t_size, losses = zip(*cache_loss[phase])
+        plt.plot(t_size, losses)
+    plt.hlines(randomguess_loss, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
+    #plt.axis([0, NUM_EPOCHS, 0, 1])
+    plt.title('Learning curve, classes=' + str(class_names))
+    plt.xlabel('Epoch #')
+    plt.ylabel('Cross-entropy loss')
+    plt.legend(['train', 'val', 'random guess'])
+    #plt.ylim(top=3) 
+    plt.show()
+    
+    # Acc
+    randomguess_acc = 1/len(class_names)
+    for phase in ['train', 'val']:
+        t_size, acc = zip(*cache_acc[phase])
+        plt.plot(t_size, acc)
+    plt.hlines(randomguess_acc, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
+    plt.title('Learning curve, classes=' + str(class_names))
+    plt.xlabel('Epoch #')
+    plt.ylabel('Accuracy')
+    plt.legend(['train', 'val', 'random guess'])
+    plt.show()
+
+        
 #%%Finetuning the convnet
 #Load a pretrained model and reset final fully connected layer.
 #model_ft = models.resnet18(pretrained=True)
@@ -300,7 +334,7 @@ criterion = nn.CrossEntropyLoss()
 
 # Observe that all parameters are being optimized
 #optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-optimizer_ft = optim.Adam(model_ft.parameters())
+optimizer_ft = optim.Adam(model_ft.parameters(),  lr=0.0001) # defaulat ADAM lr = 0.001
 
 # Decay LR by a factor of 0.1 every 7 epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
@@ -308,50 +342,83 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 #%% Train and evaluate
 #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
 NUM_EPOCHS = 25
+
 model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                       num_epochs=NUM_EPOCHS)
+                       num_epochs=NUM_EPOCHS, verbose=False)
 
 visualize_model(model_ft)
 
+learning_curve(cache_loss, cache_acc)
 
+#%% 6-18-19: Hyperparameter tuning - Train and evaluate
+#It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
+NUM_EPOCHS = 25
 
-#%% 6-11-19: Plot learning curve
+TRIALS_HYPERPARAM = 30
+alpha = np.zeros((TRIALS_HYPERPARAM, 1)) # learning rates
+alpha_cacheloss = []
+alpha_cacheacc = []
+alpha_model = []
+for i in range(TRIALS_HYPERPARAM):
+    print('Trial {}/{}'.format(i, TRIALS_HYPERPARAM - 1))
+    print('-' * 10)
+            
+    this_lr = math.pow(10, random.uniform(-4,-1)) # explore LR = [0.0001, 0.1]
 
-# Losses
-randomguess_loss = np.log(len(class_names))
-for phase in ['train', 'val']:
-    t_size, losses = zip(*cache_loss[phase])
-    plt.plot(t_size, losses)
-plt.hlines(randomguess_loss, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
-#plt.axis([0, NUM_EPOCHS, 0, 1])
-plt.title('Learning curve, classes=' + str(class_names))
-plt.xlabel('Epoch #')
-plt.ylabel('Cross-entropy loss')
-plt.legend(['train', 'val', 'random guess'])
-plt.show()
+    optimizer_ft = optim.Adam(model_ft.parameters(),  lr=0.0001) # defaulat ADAM lr = 0.001
+    model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                           num_epochs=NUM_EPOCHS, verbose=False)
+    
+    best_loss_train = np.min(cache_loss['train'], axis=0)[1]
+    best_loss_val = np.min(cache_loss['val'], axis=0)[1]
+    best_acc_train = np.max(cache_acc['train'], axis=0)[1]
+    best_acc_val = np.max(cache_acc['val'], axis=0)[1]
+    print('Learning rate: {:.4f}: '.format(this_lr))
+    print('Best train loss: {:.4f}:  Acc: {:.4f}'.format(
+            best_loss_train, best_acc_train))
+    print('Best val loss: {:.4f}:  Acc: {:.4f}'.format(
+            best_loss_val, best_acc_val))
+        
+#    visualize_model(model_ft)
+    
+#    learning_curve(cache_loss, cache_acc)
+    
+    # Cache model, learning curves
+    alpha[i] = this_lr
+    alpha_cacheloss.append(cache_loss)
+    alpha_cacheacc.append(cache_acc)
+    alpha_model.append(model_ft)
 
-# Acc
-randomguess_acc = 1/len(class_names)
-for phase in ['train', 'val']:
-    t_size, acc = zip(*cache_acc[phase])
-    plt.plot(t_size, acc)
-plt.hlines(randomguess_acc, xmin=0, xmax=NUM_EPOCHS, colors=(0,1,0), linestyles='dashed') # random-guess loss marked as horizontal green dashed line
-plt.title('Learning curve, classes=' + str(class_names))
-plt.xlabel('Epoch #')
-plt.ylabel('Accuracy')
-plt.legend(['train', 'val', 'random guess'])
-plt.show()
+#%% 6-18-19: Record best losses and accuracies
+best_loss_train = np.zeros((TRIALS_HYPERPARAM, 1))
+best_loss_val = np.zeros((TRIALS_HYPERPARAM, 1))
+best_acc_train = np.zeros((TRIALS_HYPERPARAM, 1))
+best_acc_val = np.zeros((TRIALS_HYPERPARAM, 1))
+for i in range(TRIALS_HYPERPARAM):
+    print('Trial {}/{}'.format(i, TRIALS_HYPERPARAM - 1))
+    print('-' * 10)
+    print('Learning rate: {:.4f}: '.format(alpha[i][0]))
+    
+    best_loss_train[i] = np.min(alpha_cacheloss[i]['train'], axis=0)[1]
+    best_loss_val[i] = np.min(alpha_cacheloss[i]['val'], axis=0)[1]
+    best_acc_train[i] = (np.max(alpha_cacheacc[i]['train'], axis=0)[1]).cpu()
+    best_acc_val[i] = (np.max(alpha_cacheacc[i]['val'], axis=0)[1]).cpu()
+    
+    
+    print('Best train loss: {:.4f}:  Acc: {:.4f}'.format(
+            best_loss_train[i], best_acc_train[i]))
+    print('Best val loss: {:.4f}:  Acc: {:.4f}'.format(
+            best_loss_val[i], best_acc_val[i]))
 
 #%% ConvNet as fixed feature extractor
 #Here, we need to freeze all the network except the final layer. We need to set requires_grad == False to freeze the parameters so that the gradients are not computed in backward().
-
-model_conv = torchvision.models.resnet18(pretrained=True)
+model_conv = densenet_av.densenet_40_12_bc(pretrained=True)
 for param in model_conv.parameters():
     param.requires_grad = False
 
 # Parameters of newly constructed modules have requires_grad=True by default
 num_ftrs = model_conv.fc.in_features
-model_conv.fc = nn.Linear(num_ftrs, 2)
+model_conv.fc = nn.Linear(num_ftrs, num_classes)
 
 model_conv = model_conv.to(device)
 
@@ -359,17 +426,23 @@ criterion = nn.CrossEntropyLoss()
 
 # Observe that only parameters of final layer are being optimized as
 # opposed to before.
-optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
+#optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
+optimizer_conv = optim.Adam(model_ft.parameters())
 
 # Decay LR by a factor of 0.1 every 7 epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
 
 #%% Train and evaluate
 #On CPU this will take about half the time compared to previous scenario. This is expected as gradients don’t need to be computed for most of the network. However, forward does need to be computed.
-model_conv = train_model(model_conv, criterion, optimizer_conv,
+#model_conv = train_model(model_conv, criterion, optimizer_conv,
+#                         exp_lr_scheduler, num_epochs=25)
+model_conv, cache_loss2, cache_acc2 = train_model(model_conv, criterion, optimizer_conv,
                          exp_lr_scheduler, num_epochs=25)
 
 visualize_model(model_conv)
 
+learning_curve(cache_loss2, cache_acc2)
+
 plt.ioff()
 plt.show()
+

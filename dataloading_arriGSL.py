@@ -44,8 +44,10 @@ PATH_VAL = os.path.join(PATH_DATA, 'val/')
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
 #PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
 #PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
-PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_4class.csv')
-PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_4class.csv')
+#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_4class.csv')
+#PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_4class.csv')
+PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_4class_parotidectomy.csv')
+PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_4class_parotidectomy.csv')
 
 #myclasses = ["Artery",
 #"Bone",
@@ -59,11 +61,17 @@ PATH_CSV_VAL = os.path.join(PATH_DATA, 'arritissue_sessions_val_4class.csv')
 #"PerichondriumWCartilage",
 #"Skin",
 #"Vein"]
-myclasses = [
-"Bone",
-"Fascia",
+#myclasses = [ # 4 class classifier
+#"Bone",
+#"Fascia",
+#"Fat",
+#"Muscle"
+#]
+myclasses = [ # Parotid classifier
 "Fat",
-"Muscle"
+"Muscle",
+"Nerve",
+"Parotid",
 ]
 num_classes = len(myclasses)
 
@@ -177,7 +185,7 @@ def get_segment_crop(img,tol=0, mask=None):
 #
 #__len__ so that len(dataset) returns the size of the dataset.
 #__getitem__ to support the indexing such that dataset[i] can be used to get ith sample
-#Let’s create a dataset class for our face landmarks dataset. We will read the csv in __init__ but leave the reading of images to __getitem__. This is memory efficient because all the images are not stored in the memory at once but read as required.
+#Let’s create a dataset class for our ARRIScope tissue image dataset. We will read the csv in __init__ but leave the reading of images to __getitem__. This is memory efficient because all the images are not stored in the memory at once but read as required.
 #
 #Sample of our dataset will be a dict {'image': image, 'tissue': tissue type (string)}. Our dataset will take an optional argument transform so that any required processing can be applied on the sample. We will see the usefulness of transform in the next section.
     
@@ -203,16 +211,13 @@ class ArriTissueDataset(Dataset):
     def __getitem__(self, idx):
         # Flat indexing of tissues by acqusition session, skipping missing tissue samples not acquired in some sessions
         istissue = self.sessions_frame.iloc[:,1:].values
-#        istissue = self.sessions_frame.iloc[:,[5,7]].values # 2-class problem of muscle vs fascia
         sub_row, sub_col = np.nonzero(istissue)
-#        flat_ind = np.ravel_multi_index(np.nonzero(istissue), np.shape(istissue))
-#        this_row, this_col = np.unravel_index(flat_ind[idx])
         this_row = sub_row[idx]
         this_col = sub_col[idx]
         this_session = self.sessions_frame.iloc[this_row, 0]
         this_tissue = self.sessions_frame.columns[this_col + 1]
         
-        # Read all 7 tiff narrowband image corresponding to session, concatenating in spectral dimension as 21 channel image
+        # Read all 7 tiff narrowband imagees corresponding to session, concatenating in spectral dimension as 21 channel image
         this_folder = os.path.join(self.root_dir, str(this_session), this_tissue)
         this_tiffs = [f for f in os.listdir(this_folder) if f.endswith('.tif')]
         n_tiffs = len(this_tiffs)
@@ -237,7 +242,7 @@ class ArriTissueDataset(Dataset):
             
         segmentation = mpimg.imread(os.path.join(segmentation_folder, str(segmentation_filename[0])))
         segmentation = segmentation[:,:,0] # 2-dim mask of 0 or 1
-        image, segmentation = get_segment_crop(image, mask=segmentation)   # crop image to bounding box around segmentation    
+#        image, segmentation = get_segment_crop(image, mask=segmentation)   # crop image to bounding box around segmentation    
              
         # Convert tissue string names to categorical integers
         this_tissue = tissueclass_str2int(this_tissue)
@@ -912,7 +917,7 @@ def main():
 #            torch.min(image.data[0, :, :]), torch.min(image.data[1, :, :]), torch.min(image.data[2, :, :])))
         
         # Plot histogram of pixel values after normalization
-        show_histogram_RGBchannels(image)
+#        show_histogram_RGBchannels(image)
     
         if i == 13:
             break

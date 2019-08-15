@@ -20,7 +20,7 @@ from os.path import dirname, join
 #Implementation based on https://github.com/andreasveit/densenet-pytorch
 densenet_40_12_bc_weights_path = join(dirname(__file__), "pretrained_densenet_4012BC.pth.tar")
 
-def densenet_40_12_bc(pretrained=False, requires_grad=False, **kwargs):
+def densenet_40_12_bc(pretrained=False, requires_grad=False, in_channels=3, **kwargs):
     layers=40
     depth=10
     growth_rate=12
@@ -29,7 +29,7 @@ def densenet_40_12_bc(pretrained=False, requires_grad=False, **kwargs):
     bottleneck= True
     model=DenseNet3(layers, depth, growth_rate, reduction=reduce_rate,
                          bottleneck=bottleneck, 
-                         dropRate=drop_rate)
+                         dropRate=drop_rate, in_channels=in_channels)
     if pretrained:
         checkpoint = torch.load(densenet_40_12_bc_weights_path)
         model.load_state_dict(checkpoint['state_dict'])
@@ -104,7 +104,7 @@ class DenseBlock(nn.Module):
 
 class DenseNet3(nn.Module):
     def __init__(self, depth, num_classes, growth_rate=12,
-                 reduction=0.5, bottleneck=True, dropRate=0.0):
+                 reduction=0.5, bottleneck=True, dropRate=0.0, in_channels=3): # CHANGE 3 TO
         super(DenseNet3, self).__init__()
         in_planes = 2 * growth_rate
         n = (depth - 4) / 3
@@ -115,7 +115,7 @@ class DenseNet3(nn.Module):
             block = BasicBlock
         n = int(n)
         # 1st conv before any dense block
-        self.conv1 = nn.Conv2d(3, in_planes, kernel_size=3, stride=1,
+        self.conv1 = nn.Conv2d(in_channels, in_planes, kernel_size=3, stride=1,   
                                padding=1, bias=False)
         # 1st block
         self.block1 = DenseBlock(n, in_planes, growth_rate, block, dropRate)

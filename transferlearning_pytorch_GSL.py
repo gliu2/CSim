@@ -93,7 +93,7 @@ dataloader_train = torch.utils.data.DataLoader(transformed_dataset_train, batch_
                         shuffle=True, num_workers=4)
 
 dataloader_val = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=8,
-                        shuffle=True, num_workers=4)
+                        shuffle=False, num_workers=4)
     
 dataloaders = {'train': dataloader_train, 'val': dataloader_val}
 
@@ -102,18 +102,6 @@ dataset_sizes_val = len(transformed_dataset_val)
 dataset_sizes = {'train': dataset_sizes_train, 'val': dataset_sizes_val}
 
 class_names = myclasses
-
-
-##data_dir = 'data/hymenoptera_data'
-#data_dir = 'C:/Users/CTLab/Documents/George/Python_data/hymenoptera_data'
-#image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-#                                          data_transforms[x])
-#                  for x in ['train', 'val']}
-#dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-#                                             shuffle=True, num_workers=4)
-#              for x in ['train', 'val']}
-#dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
-#class_names = image_datasets['train'].classes
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -196,7 +184,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, verbose=T
 #            for inputs, labels in dataloaders[phase]:
 #                inputs = inputs.to(device)
 #                labels = labels.to(device)
-            for sample_batch in dataloaders[phase]:
+            for ii, sample_batch in enumerate(dataloaders[phase]):
                 inputs, labels = sample_batch['image'], sample_batch['tissue']
                 inputs = inputs.type(torch.cuda.FloatTensor)
                 inputs = inputs.to(device)
@@ -217,6 +205,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, verbose=T
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
+                        
+                print(ii)
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
@@ -341,7 +331,7 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
 #%% Train and evaluate
 #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
-NUM_EPOCHS = 25
+NUM_EPOCHS = 200
 
 model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=NUM_EPOCHS, verbose=False)

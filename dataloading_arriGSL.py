@@ -206,7 +206,7 @@ class ArriTissueDataset(Dataset):
         self.transform = transform
 
     def __len__(self):
-        return np.count_nonzero(self.sessions_frame.iloc[:,1:].values)
+        return np.count_nonzero(self.sessions_frame.iloc[:,1:].values) # number of mini-batches per epoch?
 
     def __getitem__(self, idx):
         # Flat indexing of tissues by acqusition session, skipping missing tissue samples not acquired in some sessions
@@ -902,7 +902,7 @@ def main():
                                                    RandomCropInSegmentation(32),
                                                    ToTensor(),
                                                    normalize,
-#                                                   denormalize
+                                                   denormalize
 #                                                   ImageStandardizePerImage()
                                                ]))
     

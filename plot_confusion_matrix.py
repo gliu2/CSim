@@ -38,8 +38,8 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
-    # Only use the labels that appear in the data
-    classes = classes[unique_labels(y_true, y_pred)]
+#    # Only use the labels that appear in the data
+#    classes = classes[unique_labels(y_true, y_pred)]
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix")
@@ -84,14 +84,18 @@ def num2str_labels(label_num, class_names):
     return label_str
 
 #%%
-np.set_printoptions(precision=2)
-
-# Plot non-normalized confusion matrix
-plot_confusion_matrix(y_test, y_pred, classes=class_names,
-                      title='Confusion matrix, without normalization')
-
-# Plot normalized confusion matrix
-plot_confusion_matrix(y_test, y_pred, classes=class_names, normalize=True,
-                      title='Normalized confusion matrix')
-
-plt.show()
+def main():
+    np.set_printoptions(precision=2)
+    
+    # Plot non-normalized confusion matrix
+    plot_confusion_matrix(y_test, y_pred, classes=class_names,
+                          title='Confusion matrix, without normalization')
+    
+    # Plot normalized confusion matrix
+    plot_confusion_matrix(y_test, y_pred, classes=class_names, normalize=True,
+                          title='Normalized confusion matrix')
+    
+    plt.show()
+    
+if __name__ == "__main__": 
+    main()

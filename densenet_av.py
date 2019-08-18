@@ -20,12 +20,12 @@ from os.path import dirname, join
 #Implementation based on https://github.com/andreasveit/densenet-pytorch
 densenet_40_12_bc_weights_path = join(dirname(__file__), "pretrained_densenet_4012BC.pth.tar")
 
-def densenet_40_12_bc(pretrained=False, requires_grad=False, in_channels=3, **kwargs):
+def densenet_40_12_bc(pretrained=False, requires_grad=False, in_channels=3, drop_rate=0.0, **kwargs):
     layers=40
     depth=10
     growth_rate=12
     reduce_rate=0.5
-    drop_rate= 0.0
+#    drop_rate= 0.0
     bottleneck= True
     model=DenseNet3(layers, depth, growth_rate, reduction=reduce_rate,
                          bottleneck=bottleneck, 

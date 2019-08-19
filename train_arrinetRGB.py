@@ -33,6 +33,7 @@ import os
 import copy
 import pickle
 import mat
+import random
 #import dataloading_arriGSL
 import densenet_av
 
@@ -99,7 +100,7 @@ DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
 BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
-NUM_EPOCHS = 50
+NUM_EPOCHS = 40
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
 LRDECAY_GAMMA = 0.1
@@ -229,11 +230,13 @@ def visualize_model(model, dataloaders, device, class_names, num_images=6):
                     model.train(mode=was_training)
                     return
         model.train(mode=was_training)
+        
+    return fig
 
 #% 6-11-19: Plot Learning curve
 def learning_curve(cache_loss, cache_acc, class_names, num_epochs=25):
     # Losses
-    plt.figure()
+    fig1 = plt.figure()
     randomguess_loss = np.log(len(class_names))
     for phase in ['train', 'val']:
         t_size, losses = zip(*cache_loss[phase])
@@ -248,7 +251,7 @@ def learning_curve(cache_loss, cache_acc, class_names, num_epochs=25):
     plt.show()
     
     # Acc
-    plt.figure()
+    fig2 = plt.figure()
     randomguess_acc = 1/len(class_names)
     for phase in ['train', 'val']:
         t_size, acc = zip(*cache_acc[phase])
@@ -259,6 +262,8 @@ def learning_curve(cache_loss, cache_acc, class_names, num_epochs=25):
     plt.ylabel('Accuracy')
     plt.legend(['train', 'val', 'random guess'])
     plt.show()
+    
+    return fig1, fig2
 
 def pickle_loader(input_file):
     item = pickle.load(open(input_file, 'rb'))
@@ -321,174 +326,191 @@ def plot_confusion_matrix(cm, classes,
                         ha="center", va="center",
                         color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
-    return ax
+    return fig
 
 #%% Main routine
 def main():
-    # Get start time for this run
-    timestr = time.strftime("%Y%m%d-%H%M%S")
-    print(timestr)
+  
+    for tt in range(30):
+        # Get start time for this run
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        print(timestr)
     
-    for yy in [0, 1e-3, 1e-4, 1e-5]:
-        ALPHA_L2REG = yy
+        xx = 3 + random.random()*4
+        LEARNING_RATE = 10**-xx
         
-        for zz in [0.0, 0.2]:
-            DROPOUT_RATE = zz
-    
-            for xx in [True, False]:
-                ISMULTISPECTRAL = xx
-            
-                #%% Data loading
-                if ISMULTISPECTRAL:
-                    # set paths to RGB images
-                    data_dir = PATH_PATCHES3D
-                    out_path = PATH_OUTPUT3D
-                    
-                    # Data augmentation and normalization for training
-                    # Just normalization for validation
-                    data_transforms = {
-                        'train': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                        ]),
-                        'val': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                        ]),
-                        'test': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                        ]),
-                    }
-                    
-                    image_datasets = {x: datasets.DatasetFolder(os.path.join(data_dir, x), loader=pickle_loader, 
-                                                                extensions='.pkl', transform=data_transforms[x])
-                                      for x in ['train', 'val', 'test']}
-                    num_channels = 21
-                    
-                else: # RGB 3-channel TIFF tiled images
-                    # set paths to RGB images
-                    data_dir = PATH_PATCHES2D
-                    out_path = PATH_OUTPUT2D
-                            
-                    # Data augmentation and normalization for training
-                    # Just normalization for validation
-                    data_transforms = {
-                        'train': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                        ]),
-                        'val': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                        ]),
-                        'test': transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                        ]),
-                    }
-                    
-                    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-                                                              data_transforms[x])
-                                      for x in ['train', 'val', 'test']}
-                    num_channels = 3
-                    
-                print('Num channels', num_channels)
-                dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
-                                                             shuffle=True, num_workers=4)
-                              for x in ['train', 'val', 'test']}
-                dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
-                class_names = image_datasets['train'].classes
-                num_classes = len(class_names)
+        # random search hyperparameters
+        yy = 1 + random.random()*4
+        ALPHA_L2REG = 1*10**-yy
+        
+        zz = random.random()*0.15
+        DROPOUT_RATE = zz
+
+        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
+        
+        for xx in [True, False]:
+            ISMULTISPECTRAL = xx
+        
+            #%% Data loading
+            if ISMULTISPECTRAL:
+                # set paths to RGB images
+                data_dir = PATH_PATCHES3D
+                out_path = PATH_OUTPUT3D
                 
-                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-                print(dataset_sizes)
-                print(num_classes)
-                print(device)
+                # Data augmentation and normalization for training
+                # Just normalization for validation
+                data_transforms = {
+                    'train': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                    'val': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                    'test': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                }
                 
-            #    #%% Visualize a few images
-            #    #Let’s visualize a few training images so as to understand the data augmentations.
-            #    
-            #    # Get a batch of training data
-            #    inputs, classes = next(iter(dataloaders['train']))
-            #    
-            #    # Make a grid from batch
-            #    out = torchvision.utils.make_grid(inputs[:, :3, :, :])
-            #    
-            #    imshow(out, title=[class_names[x] for x in classes])
+                image_datasets = {x: datasets.DatasetFolder(os.path.join(data_dir, x), loader=pickle_loader, 
+                                                            extensions='.pkl', transform=data_transforms[x])
+                                  for x in ['train', 'val', 'test']}
+                num_channels = 21
+                
+            else: # RGB 3-channel TIFF tiled images
+                # set paths to RGB images
+                data_dir = PATH_PATCHES2D
+                out_path = PATH_OUTPUT2D
                         
-                #%%Finetuning the convnet
-                #Load a pretrained model and reset final fully connected layer.
-            #    model_ft = models.resnet18(pretrained=True)
-                model_ft = densenet_av.densenet_40_12_bc(pretrained=ISPRETRAINED, in_channels=num_channels, drop_rate=DROPOUT_RATE)
-                num_ftrs = model_ft.fc.in_features
-                model_ft.fc = nn.Linear(num_ftrs, num_classes)
+                # Data augmentation and normalization for training
+                # Just normalization for validation
+                data_transforms = {
+                    'train': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                    'val': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                    'test': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                }
                 
-                model_ft = model_ft.to(device)
+                image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
+                                                          data_transforms[x])
+                                  for x in ['train', 'val', 'test']}
+                num_channels = 3
                 
-                criterion = nn.CrossEntropyLoss()
-                
-                # Observe that all parameters are being optimized
-            #    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-                optimizer_ft = optim.Adam(model_ft.parameters(),  lr=LEARNING_RATE, weight_decay=ALPHA_L2REG) # defaulat ADAM lr = 0.001
-                
-                # Decay LR by a factor of 0.1 every 7 epochs
-                exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=LRDECAY_STEP, gamma=LRDECAY_GAMMA)
-                
-                #%% Train and evaluate
-                if LOADMODEL:
-                    print('Loading model... Select loss/acc file:')
-                    filepath = mat.uigetfile()
-                    [cache_loss, cache_acc] = pickle.load(open(filepath, "rb"))
-                    print('Loading model... ')
-                    modelpath = filepath.replace('lossacc', 'modelparam').replace('.pkl', '.pt')
-                    model_ft.load_state_dict(torch.load(modelpath))
+            print('Num channels', num_channels)
+            dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
+                                                         shuffle=True, num_workers=4)
+                          for x in ['train', 'val', 'test']}
+            dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
+            class_names = image_datasets['train'].classes
+            num_classes = len(class_names)
+            
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            print(dataset_sizes)
+            print(num_classes)
+            print(device)
+            
+        #    #%% Visualize a few images
+        #    #Let’s visualize a few training images so as to understand the data augmentations.
+        #    
+        #    # Get a batch of training data
+        #    inputs, classes = next(iter(dataloaders['train']))
+        #    
+        #    # Make a grid from batch
+        #    out = torchvision.utils.make_grid(inputs[:, :3, :, :])
+        #    
+        #    imshow(out, title=[class_names[x] for x in classes])
                     
-                else: # Train model from scratch
-                    print('Train model...')
-                    # Train
-                    #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
-        #            model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-        #                                   dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
-                    # For Adam optimizer, no need for LR decay
-                    model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, 
-                                           dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
-                       
-                    # Save loss and acc to disk
-                    filename_pre = 'nclass12'
-                    t_size, val_acc = zip(*cache_acc['val']) # Calculate best val acc
-                    bestval_acc =  max(val_acc).item()
-                    
-        #            filename_pre = timestr + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_' + str(LRDECAY_STEP) + '_' + str(LRDECAY_GAMMA) + '_val' +"{:.4f}".format(bestval_acc)
-                    filename_pre = timestr + '_multispec' + str(ISMULTISPECTRAL) + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_L2reg' + str(ALPHA_L2REG) + '_DROPOUT' + str(DROPOUT_RATE) + '_val' +"{:.4f}".format(bestval_acc)
-                    filename = 'lossacc_' + filename_pre + '.pkl'
-                    pickle.dump([cache_loss, cache_acc], open(os.path.join(out_path, filename), "wb" ))
-                    
-                    # Save trained model's parameters for inference
-                    filename2 = 'modelparam_' + filename_pre + '.pt'
-                    torch.save(model_ft.state_dict(), os.path.join(out_path, filename2))
+            #%%Finetuning the convnet
+            #Load a pretrained model and reset final fully connected layer.
+        #    model_ft = models.resnet18(pretrained=True)
+            model_ft = densenet_av.densenet_40_12_bc(pretrained=ISPRETRAINED, in_channels=num_channels, drop_rate=DROPOUT_RATE)
+            num_ftrs = model_ft.fc.in_features
+            model_ft.fc = nn.Linear(num_ftrs, num_classes)
+            
+            model_ft = model_ft.to(device)
+            
+            criterion = nn.CrossEntropyLoss()
+            
+            # Observe that all parameters are being optimized
+        #    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+            optimizer_ft = optim.Adam(model_ft.parameters(),  lr=LEARNING_RATE, weight_decay=ALPHA_L2REG) # defaulat ADAM lr = 0.001
+            
+            # Decay LR by a factor of 0.1 every 7 epochs
+            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=LRDECAY_STEP, gamma=LRDECAY_GAMMA)
+#            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=1000, gamma=LRDECAY_GAMMA) # For Adam optimizer, no need for LR decay
+            
+            #%% Train and evaluate
+            if LOADMODEL:
+                print('Loading model... Select loss/acc file:')
+                filepath = mat.uigetfile()
+                [cache_loss, cache_acc] = pickle.load(open(filepath, "rb"))
+                print('Loading model... ')
+                modelpath = filepath.replace('lossacc', 'modelparam').replace('.pkl', '.pt')
+                model_ft.load_state_dict(torch.load(modelpath))
                 
-                # Evaluate 
-                model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
-                visualize_model(model_ft,  dataloaders, device, class_names)
-                learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
+            else: # Train model from scratch
+                print('Train model...')
+                # Train
+                #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
+                model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                                       dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
+                   
+                # Save loss and acc to disk
+                filename_pre = 'nclass12'
+                t_size, val_acc = zip(*cache_acc['val']) # Calculate best val acc
+                bestval_acc =  max(val_acc).item()
                 
-                # Display confusion matrix
-                for phase in ['train', 'val', 'test']:
-                    confusion_matrix = torch.zeros(num_classes, num_classes)
-                    with torch.no_grad():
-                        for i, (inputs, classes) in enumerate(dataloaders[phase]):
-                            inputs = inputs.to(device)
-                            classes = classes.to(device)
-                            outputs = model_ft(inputs)
-                            _, preds = torch.max(outputs, 1)
-                            for t, p in zip(classes.view(-1), preds.view(-1)):
-                                    confusion_matrix[t.long(), p.long()] += 1
+    #            filename_pre = timestr + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_' + str(LRDECAY_STEP) + '_' + str(LRDECAY_GAMMA) + '_val' +"{:.4f}".format(bestval_acc)
+                filename_pre = timestr + '_multispec' + str(ISMULTISPECTRAL) + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_L2reg' + str(ALPHA_L2REG) + '_DROPOUT' + str(DROPOUT_RATE) + '_val' +"{:.4f}".format(bestval_acc)
+                filename = 'lossacc_' + filename_pre + '.pkl'
+                pickle.dump([cache_loss, cache_acc], open(os.path.join(out_path, filename), "wb" ))
                 
-            #        print(confusion_matrix)
-                    print(confusion_matrix.diag()/confusion_matrix.sum(1)) # per-class accuracy
-                    plot_confusion_matrix(confusion_matrix, classes=class_names, normalize=CM_NORMALIZED,
-                                          title='Confusion matrix, ' + phase)
+                # Save trained model's parameters for inference
+                filename2 = 'modelparam_' + filename_pre + '.pt'
+                torch.save(model_ft.state_dict(), os.path.join(out_path, filename2))
+            
+            # Evaluate 
+            model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
+            fig0 = visualize_model(model_ft,  dataloaders, device, class_names)
+            fig1, fig2 = learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
+            
+            fig0_filename = 'visualize_' + filename_pre + '.png'
+            fig1_filename = 'losscurve_' + filename_pre + '.png'
+            fig2_filename = 'acccurve_' + filename_pre + '.png'
+            fig0.savefig(os.path.join(out_path, fig0_filename), bbox_inches='tight')
+            fig1.savefig(os.path.join(out_path, fig1_filename), bbox_inches='tight')
+            fig2.savefig(os.path.join(out_path, fig2_filename), bbox_inches='tight')
+            
+            # Display confusion matrix
+            for phase in ['train', 'val', 'test']:
+                confusion_matrix = torch.zeros(num_classes, num_classes)
+                with torch.no_grad():
+                    for i, (inputs, classes) in enumerate(dataloaders[phase]):
+                        inputs = inputs.to(device)
+                        classes = classes.to(device)
+                        outputs = model_ft(inputs)
+                        _, preds = torch.max(outputs, 1)
+                        for t, p in zip(classes.view(-1), preds.view(-1)):
+                                confusion_matrix[t.long(), p.long()] += 1
+            
+        #        print(confusion_matrix)
+                print(confusion_matrix.diag()/confusion_matrix.sum(1)) # per-class accuracy
+                fig3 = plot_confusion_matrix(confusion_matrix, classes=class_names, normalize=CM_NORMALIZED,
+                                      title='Confusion matrix, ' + phase)
+                
+                # Save confusion matrix figure
+                fig3_filename = 'cm' + phase + '_' filename_pre + '.png'
+                fig3.savefig(os.path.join(out_path, fig3_filename), bbox_inches='tight')
         
     #    #%% ConvNet as fixed feature extractor
     #    #Here, we need to freeze all the network except the final layer. We need to set requires_grad == False to freeze the parameters so that the gradients are not computed in backward().

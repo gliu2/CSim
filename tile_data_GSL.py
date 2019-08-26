@@ -9,7 +9,7 @@ Before running:
     -Update CSV file with latest tissue dataset: arritissue_sessions.csv (C:/Users/CTLab/Documents/George/Python_data/arritissue_data)
 
 @author: CTLab
-8-14-19
+Last edit: 8-25-19 - updated tile shape from 36x36 (error) -> (32x32). All previous models trained on 36x36 tiles! 
 George Liu
 
 Dependencies: dataloading_arriGSL.py, mat.py
@@ -28,15 +28,16 @@ import pickle
 PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
 # Tile training data
-#PATH_IM = os.path.join(PATH_DATA, 'train/')
+PATH_IM = os.path.join(PATH_DATA, 'train/')
 #PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions.csv')
+PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_test.csv')
 #PATH_PATCHES2D = os.path.join(PATH_DATA, 'train_patches2d/')
 #PATH_PATCHES3D = os.path.join(PATH_DATA, 'train_patches3d/')
 # Tile val data
-PATH_IM = os.path.join(PATH_DATA, 'val/')
-PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
-PATH_PATCHES2D = os.path.join(PATH_DATA, 'val_patches2d/')
-PATH_PATCHES3D = os.path.join(PATH_DATA, 'val_patches3d/')
+#PATH_IM = os.path.join(PATH_DATA, 'val/')
+#PATH_CSV = os.path.join(PATH_DATA, 'arritissue_sessions_val.csv')
+PATH_PATCHES2D = os.path.join(PATH_DATA, 'patches2d/')
+PATH_PATCHES3D = os.path.join(PATH_DATA, 'patches3d/')
 
 myclasses = ["Artery",
 "Bone",
@@ -52,9 +53,12 @@ myclasses = ["Artery",
 "Vein"]
 num_classes = len(myclasses)
 
+# Fraction of tissue in mask 
+MY_FRACINMASK = 1
+
 #%% 8-14-19: Define function to tile image into patches
 
-def gettiles2d(im, mask, tile_size=(36,36), fracinmask=0.5):
+def gettiles2d(im, mask, tile_size=(32,32), fracinmask=0.5):
     """Composes several transforms together.
 
     Args:
@@ -90,7 +94,7 @@ def gettiles2d(im, mask, tile_size=(36,36), fracinmask=0.5):
             
     return cache_tiles
 
-def gettiles3d(im, mask, tile_size=(36,36), fracinmask=0.5):
+def gettiles3d(im, mask, tile_size=(32,32), fracinmask=0.5):
     """Composes several transforms together.
 
     Args:
@@ -134,7 +138,7 @@ def save_tilesRGB(list_tiles, target_folder, session_date, this_tissue):
     Output: TIFF image
     """ 
     for i, tile in enumerate(list_tiles):
-        filename = str(session_date) + '_' + str(i) + '.tiff'
+        filename = str(session_date) + '_' + str(this_tissue) + '_' + str(i) + '.tiff'
         imageio.imwrite(os.path.join(target_folder, this_tissue, filename), tile[:,:,:3])
         
 def save_tilesMS(list_tiles, target_folder, session_date, this_tissue):
@@ -144,7 +148,7 @@ def save_tilesMS(list_tiles, target_folder, session_date, this_tissue):
     Output: pickle file
     """ 
     for i, tile in enumerate(list_tiles):
-        filename = str(session_date) + '_' + str(i) + '.pkl'
+        filename = str(session_date) + '_' + str(this_tissue) + '_' + str(i) + '.pkl'
         pickle.dump(tile, open(os.path.join(target_folder, this_tissue, filename), "wb" ))
 
 #%% Test scripts
@@ -240,7 +244,7 @@ def main():
 #        segmentation = segmentation[:,:,0] # 2-dim mask of 0 or 1 
 
         # Tile image in mask
-        tiles = gettiles3d(image, segmentation)
+        tiles = gettiles3d(image, segmentation, fracinmask=MY_FRACINMASK)
         # Save RGB 3-channel image (TIFF)
 #        print('Saving to folder: ' + target_folder2d)
         save_tilesRGB(tiles, target_folder2d, this_session, this_tissue)

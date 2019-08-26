@@ -28,6 +28,7 @@ import numpy as np
 import torchvision
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import time
 import os
 import copy
@@ -36,6 +37,7 @@ import mat
 import random
 #import dataloading_arriGSL
 import densenet_av
+import sys
 
 plt.ion()   # interactive mode
 
@@ -86,16 +88,20 @@ STD_CHANNEL_PIXELVALS = np.array([
 23.27044106,
 23.48049806
 ])
-
+    
+# Tile dimensions (don't change)
+TILE_HEIGHT = 36
+TILE_WIDTH = 36
+    
 # Paths to data
-#PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d'
-#PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d'
-#PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d'
-#PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d'
-PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_parotid'
-PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d_parotid'
-PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d_parotid'
-PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d_parotid'
+PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d'
+PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d'
+PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d'
+PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d'
+#PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_parotid'
+#PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d_parotid'
+#PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d_parotid'
+#PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d_parotid'
     
 # Figure saving parameters
 FIG_HEIGHT = 16 # inches
@@ -103,13 +109,13 @@ FIG_WIDTH = 12 # inches
 FIG_DPI = 200
 
 # Hyper-parameters
-LOADMODEL = False
+LOADMODEL = True
 ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
 BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
-NUM_EPOCHS = 50
+NUM_EPOCHS = 40
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
 LRDECAY_GAMMA = 0.1
@@ -213,7 +219,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
 
 #% Visualize model predictions
 #    Generic function to display predictions for a few images
-def visualize_model(model, dataloaders, device, class_names, num_images=6):
+def visualize_model(model, dataloaders, device, class_names, num_images=6, columns=2):
     was_training = model.training
     model.eval()
     images_so_far = 0
@@ -230,10 +236,10 @@ def visualize_model(model, dataloaders, device, class_names, num_images=6):
 
             for j in range(inputs.size()[0]):
                 images_so_far += 1
-                ax = fig.add_subplot(num_images//2, 2, images_so_far)
+                ax = fig.add_subplot(num_images//columns, columns, images_so_far)
                 ax.axis('off')
 #                ax.set_title('predicted: {}'.format(class_names[preds[j]]))
-                ax.set_title('predicted: {}, true: {}'.format(class_names[preds[j]], class_names[labels[j]]))
+                ax.set_title('pred: {}, true: {}'.format(class_names[preds[j]], class_names[labels[j]]))
                 imshow(inputs.cpu().data[j])
 
                 if images_so_far == num_images:
@@ -359,10 +365,9 @@ def main():
 #        
 #        zz = random.random()*0.1
 #        DROPOUT_RATE = zz
-#        
-#
+#    
 #        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
-        
+    
     for xx in [True, False]:
         ISMULTISPECTRAL = xx
     
@@ -433,17 +438,6 @@ def main():
         print(dataset_sizes)
         print(num_classes)
         print(device)
-        
-    #    #%% Visualize a few images
-    #    #Let’s visualize a few training images so as to understand the data augmentations.
-    #    
-    #    # Get a batch of training data
-    #    inputs, classes = next(iter(dataloaders['train']))
-    #    
-    #    # Make a grid from batch
-    #    out = torchvision.utils.make_grid(inputs[:, :3, :, :])
-    #    
-    #    imshow(out, title=[class_names[x] for x in classes])
                 
         #%%Finetuning the convnet
         #Load a pretrained model and reset final fully connected layer.
@@ -472,10 +466,79 @@ def main():
             print('Loading model... ')
             modelpath = filepath.replace('lossacc', 'modelparam').replace('.pkl', '.pt')
             model_ft.load_state_dict(torch.load(modelpath))
+            model_ft.eval()
             
             # Get same filename for saving
             path_head, path_tail = os.path.split(filepath)
             filename_pre, path_ext = os.path.splitext(path_tail)
+            
+#            # 8-25-2019
+#            # Obtain per-image classification accuracy based on patches - loop through folders without dataloader
+#            for phase in ['train', 'val', 'test']:
+#                data_dir2 = os.path.join(data_dir, phase)
+#                tissues = os.listdir(data_dir2) # should be num_classes # of folders
+#                print('Evaluating per-specimen accuracy on dataset: ', phase)
+#                
+#                # Iterate over tissue classes
+#                for tt, tissue in enumerate(tissues):
+#                    tissue_folder = os.path.join(data_dir2, tissue)
+#                    tissue_files = os.listdir(tissue_folder)
+#                    tissue_dates = [i.split('_', 1)[0] for i in tissue_files]
+#                    unique_dates = list(set(tissue_dates))
+##                    print(unique_dates)
+#                    num_dates = np.size(unique_dates)
+#                    
+#                    num_patches_tissue_date = np.zeros((num_dates, 1))
+#                    num_correctpatches_tissue_date = np.zeros((num_dates, 1))
+#                    iscorrect_tissue_date = np.zeros((num_dates, 1))
+#                    
+#                    # Calculate fraction of correct patch predictions per tissue-date specimen
+#                    num_patches = 0
+#                    for i, session in enumerate(unique_dates):
+##                        print(session)
+#                        num_patches_tissue_date[i] = tissue_dates.count(session)
+#                        tissue_patches_session_filenames = [item for item in tissue_files if item.startswith(session)]
+#                        
+#                        # Load patches into one batch of shape [M, C, H, W]
+#                        # where M is batch size (# patches), C is # channels
+#                        patches_session = np.zeros((int(num_patches_tissue_date[i]), num_channels, TILE_HEIGHT, TILE_WIDTH))
+#                        for j, patch_filename in enumerate(tissue_patches_session_filenames):
+#                            if ISMULTISPECTRAL:
+#                                this_image = pickle_loader(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 21)
+#                                mean = np.array(MEAN_CHANNEL_PIXELVALS) 
+#                                std = np.array(STD_CHANNEL_PIXELVALS)
+#                                inp = (this_image - mean)/std
+#                            else:
+#                                this_image = mpimg.imread(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 3)
+#                                mean = np.array(MEAN_CHANNEL_PIXELVALS[:3]) 
+#                                std = np.array(STD_CHANNEL_PIXELVALS[:3])
+#                                inp = (this_image - mean)/std
+#                                
+##                            plt.figure(), plt.imshow(this_image[:,:,:3])
+##                            print(os.path.join(tissue_folder, patch_filename))
+##                            sys.exit()
+#                            patches_session[j] = inp.transpose((2, 0, 1))
+#                        
+#                        # Predict on patches
+#                        with torch.no_grad():
+#                            inputs = torch.tensor(patches_session, dtype=torch.float).to(device)
+#                            outputs = model_ft(inputs)
+#                            _, preds = torch.max(outputs, 1)
+#                            
+##                        print(preds)
+#                        
+#                        # Calculate number correct patches
+#                        true_label = tt
+#                        num_correctpatches_tissue_date[i] = np.sum(preds.cpu().numpy()==true_label)
+#                        iscorrect_tissue_date[i] = (num_correctpatches_tissue_date[i]/num_patches_tissue_date[i])>=0.5 # Assume 50% or greater patches predictions gives the overall specimen prediction
+#                        
+##                        num_patches = num_patches + num_patches_tissue_date[i]
+##                        print('  correct', num_correctpatches_tissue_date[i], num_patches_tissue_date[i], iscorrect_tissue_date[i])
+##                    print(num_patches)
+#                    
+#                    # Output per-specimen results
+#                    specimens_correct = np.sum(iscorrect_tissue_date)
+#                    print('  ', tissue, ': correct specimens ', specimens_correct, ' out of ', num_dates)
             
         else: # Train model from scratch
             print('Train model...')
@@ -500,7 +563,8 @@ def main():
         
         # Evaluate 
         model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
-        fig0 = visualize_model(model_ft,  dataloaders, device, class_names)
+#        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=90, columns=10)
+        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=10)
         # Save visualization figure
         fig0_filename = 'visualize_' + filename_pre + '.png'
         fig0 = plt.gcf()
@@ -522,7 +586,7 @@ def main():
             confusion_matrix = torch.zeros(num_classes, num_classes)
             with torch.no_grad():
                 for i, (inputs, classes) in enumerate(dataloaders[phase]):
-                    inputs = inputs.to(device)
+                    inputs = inputs.to(device) # shape [128, 21, 36, 36]
                     classes = classes.to(device)
                     outputs = model_ft(inputs)
                     _, preds = torch.max(outputs, 1)

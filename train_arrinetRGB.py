@@ -38,6 +38,7 @@ import random
 #import dataloading_arriGSL
 import densenet_av
 import sys
+import pycm
 
 plt.ion()   # interactive mode
 
@@ -95,7 +96,9 @@ TILE_WIDTH = 36
     
 # Paths to data
 PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d'
+#PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_sample5'
 PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d'
+#PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d_sample5'
 PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d'
 PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d'
 #PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_parotid'
@@ -219,7 +222,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
 
 #% Visualize model predictions
 #    Generic function to display predictions for a few images
-def visualize_model(model, dataloaders, device, class_names, num_images=6, columns=2):
+def visualize_model(model, dataloaders, device, class_names, num_images=6, columns=2, phase='val'):
     was_training = model.training
     model.eval()
     images_so_far = 0
@@ -227,7 +230,7 @@ def visualize_model(model, dataloaders, device, class_names, num_images=6, colum
     fig.set_canvas(plt.gcf().canvas)
 
     with torch.no_grad():
-        for i, (inputs, labels) in enumerate(dataloaders['val']):
+        for i, (inputs, labels) in enumerate(dataloaders[phase]):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -288,7 +291,8 @@ def pickle_loader(input_file):
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title=None,
-                          cmap=plt.cm.Blues):
+#                          cmap=plt.cm.Blues): 
+                          cmap=plt.cm.BuGn):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -308,8 +312,6 @@ def plot_confusion_matrix(cm, classes,
         print("Normalized confusion matrix")
     else:
         print('Confusion matrix, without normalization')
-
-#    print(cm)
 
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -368,7 +370,8 @@ def main():
 #    
 #        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
-    for xx in [True, False]:
+#    for xx in [True, False]:
+    for xx in [True]:
         ISMULTISPECTRAL = xx
     
         #%% Data loading
@@ -427,9 +430,14 @@ def main():
             num_channels = 3
             
         print('Num channels', num_channels)
-        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
-                                                     shuffle=True, num_workers=4)
-                      for x in ['train', 'val', 'test']}
+        if not LOADMODEL:
+            dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
+                                                     shuffle=True, num_workers=0)
+                          for x in ['train', 'val', 'test']}
+        else:
+            dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
+                                                     shuffle=False, num_workers=0)
+                          for x in ['train', 'val', 'test']}
         dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
         class_names = image_datasets['train'].classes
         num_classes = len(class_names)
@@ -548,7 +556,7 @@ def main():
                                    dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
                
             # Save loss and acc to disk
-            filename_pre = 'nclass12'
+            filename_pre = 'nclass' + str(num_classes)
             t_size, val_acc = zip(*cache_acc['val']) # Calculate best val acc
             bestval_acc =  max(val_acc).item()
             
@@ -563,13 +571,16 @@ def main():
         
         # Evaluate 
         model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
-#        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=90, columns=10)
-        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=10)
-        # Save visualization figure
-        fig0_filename = 'visualize_' + filename_pre + '.png'
-        fig0 = plt.gcf()
-        fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-        plt.savefig(os.path.join(out_path, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
+        
+#        # Examine each figure and output to get granular prediction output info
+##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=90, columns=10)
+##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=10) # visualize validation images
+#        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=288, columns=12, phase='test')
+#        # Save visualization figure
+#        fig0_filename = 'visualize_' + filename_pre + '.png'
+#        fig0 = plt.gcf()
+#        fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+#        plt.savefig(os.path.join(out_path, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
         
         fig1, fig2 = learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
         
@@ -584,6 +595,8 @@ def main():
         # Display confusion matrix
         for phase in ['train', 'val', 'test']:
             confusion_matrix = torch.zeros(num_classes, num_classes)
+            y_actu = []
+            y_pred = []
             with torch.no_grad():
                 for i, (inputs, classes) in enumerate(dataloaders[phase]):
                     inputs = inputs.to(device) # shape [128, 21, 36, 36]
@@ -591,7 +604,11 @@ def main():
                     outputs = model_ft(inputs)
                     _, preds = torch.max(outputs, 1)
                     for t, p in zip(classes.view(-1), preds.view(-1)):
-                            confusion_matrix[t.long(), p.long()] += 1
+                        confusion_matrix[t.long(), p.long()] += 1
+                    
+                    # Vector of class labels and predictions
+                    y_actu = np.hstack((y_actu, classes.view(-1).cpu().numpy()))
+                    y_pred = np.hstack((y_pred, preds.view(-1).cpu().numpy()))
         
     #        print(confusion_matrix)
             print(confusion_matrix.diag()/confusion_matrix.sum(1)) # per-class accuracy
@@ -599,10 +616,16 @@ def main():
                                   title='Confusion matrix, ' + phase)
             
             # Save confusion matrix figure
-            fig3_filename = 'cm' + phase + '_' + filename_pre + '.png'
+            fig3_filename = 'cm' + phase + '_' + filename_pre + '.pdf'
             fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
             fig3.savefig(os.path.join(out_path, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
         
+            # Display confusion matrix analysis
+            cm2 = pycm.ConfusionMatrix(actual_vector=y_actu, predict_vector=y_pred) # Create CM From Data
+#            cm2 = pycm.ConfusionMatrix(matrix={"Class1": {"Class1": 1, "Class2":2}, "Class2": {"Class1": 0, "Class2": 5}}) # Create CM Directly
+            cm2 # line output: pycm.ConfusionMatrix(classes: ['Class1', 'Class2'])
+            print(cm2)
+            
     #    #%% ConvNet as fixed feature extractor
     #    #Here, we need to freeze all the network except the final layer. We need to set requires_grad == False to freeze the parameters so that the gradients are not computed in backward().
     #    

@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://github.com/HazyResearch/ukb-cardiac-mri/blob/master/ukb/models/frame/pretrained_densenet_4012BC.pth.tar
+HostUrl=https://raw.githubusercontent.com/HazyResearch/ukb-cardiac-mri/master/ukb/models/frame/pretrained_densenet_4012BC.pth.tar

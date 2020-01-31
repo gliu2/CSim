@@ -123,7 +123,7 @@ ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
-BATCH_SIZE = 256 # Dunnmon recommends 64-256 (>=16) 
+BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
 NUM_EPOCHS = 10
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
@@ -360,23 +360,23 @@ def main():
     timestr = time.strftime("%Y%m%d-%H%M%S")
     print(timestr)
     
-    for tt in range(1):
-#    for tt in range(30):
-#        # Get start time for this run
-#        timestr = time.strftime("%Y%m%d-%H%M%S")
-#        print(timestr)
-#    
-#        xx = 3 + random.random()*0.1
-#        LEARNING_RATE = 10**-xx
-#        
-#        # random search hyperparameters
-#        yy = 3 + random.random()*0.1
-#        ALPHA_L2REG = 1*10**-yy
-#        
-#        zz = random.random()*0
-#        DROPOUT_RATE = zz
-#    
-#        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
+#    for tt in range(1):
+    for tt in range(30):
+        # Get start time for this run
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        print(timestr)
+    
+        xx = 3 + random.random()*1
+        LEARNING_RATE = 10**-xx
+        
+        # random search hyperparameters
+        yy = 3 + random.random()*1
+        ALPHA_L2REG = 1*10**-yy
+        
+        zz = random.random()*0
+        DROPOUT_RATE = zz
+    
+        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
 #    for xx in [True]:
         for xx in [True, False]:

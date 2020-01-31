@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+train_arrinet_arrirawTiles.py
 Created on Thu Aug 15 11:00:39 2019
 
 Train ARRInet CNN using tiled 32x32 patches of demosaiced, unprocessed ARRIScope ariraw (.ari) images.
@@ -7,10 +8,15 @@ Train ARRInet CNN using tiled 32x32 patches of demosaiced, unprocessed ARRIScope
 Unprocessed images (21 channels) should be demosaiced by arriRead.m (.ari -> .mat), and 
 imported into Python and broken into 32x32 patches by tile_data_ariraw_GSL.py (.mat -> pickle files). 
 
+The torchvision generic dataset loader "DatasetFolder" is used to load pickled images.
+
 Input: 
     -unprocessed image data, ndarrays shape (1080, 1920, 21) [pickle format]
     -mask data, ndarrays shape (1080, 1920, ?) [TIFF]
     -CSV file
+    
+Hard-coded values:
+    -mean and std channel values were pre-calculated by 'calculate_mean_std_patches.py'
 
 Code loosely based on Transfer learning tutorial:
 https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
@@ -49,51 +55,51 @@ import pycm
 plt.ion()   # interactive mode
 
 MEAN_CHANNEL_PIXELVALS = np.array([
-178.3673522,
-159.2136305,
-145.7320306,
-4.50154166,
-1.35834203,
-26.66413484,
-1.10656146,
-56.94770658,
-5.14473639,
-128.0806568,
-57.32424962,
-93.45134808,
-45.17744126,
-2.10083132,
-3.78928152,
-4.84619569,
-4.0540281,
-4.69607718,
-123.0301386,
-84.93495828,
-25.96622659
+1125.36,
+1583.53,
+860.107,
+1.47882,
+1.99471,
+13.4813,
+3.31147,
+37.9476,
+5.82629,
+75.2963,
+45.4425,
+43.1282,
+20.8992,
+1.39119,
+1.01157,
+0.813617,
+0.872862,
+0.913199,
+67.9463,
+64.1412,
+18.6965,
 ])
 
 STD_CHANNEL_PIXELVALS = np.array([
-18.05371603,
-21.19270681,
-24.26668387,
-4.87049387,
-1.60681874,
-12.31887814,
-7.65738986,
-19.56593939,
-10.00423988,
-16.50242333,
-16.1129809,
-15.57760365,
-11.38605095,
-2.18528431,
-4.13749091,
-3.18178838,
-1.68858641,
-2.811973,
-22.58913003,
-23.27044106,
-23.48049806
+457.949,
+748.95,
+471.184,
+1.27631,
+1.25238,
+7.24421,
+2.57426,
+14.4641,
+3.2394,
+15.3003,
+9.14414,
+9.35083,
+7.06956,
+0.877986,
+0.962064,
+0.857779,
+0.661015,
+0.911388,
+21.148,
+22.4566,
+8.2226
 ])
     
 # Tile dimensions (don't change)
@@ -101,16 +107,10 @@ TILE_HEIGHT = 32
 TILE_WIDTH = 32
     
 # Paths to data
-PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d'
-#PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_sample5'
-PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d'
-#PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d_sample5'
-PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d'
-PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d'
-#PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches2d_parotid'
-#PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/patches3d_parotid'
-#PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output2d_parotid'
-#PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/output3d_parotid'
+PATH_PATCHES2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/patches2d'
+PATH_PATCHES3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/patches3d'
+PATH_OUTPUT2D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/output2d'
+PATH_OUTPUT3D = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/output3d'
     
 # Figure saving parameters
 FIG_HEIGHT = 16 # inches
@@ -118,13 +118,13 @@ FIG_WIDTH = 12 # inches
 FIG_DPI = 200
 
 # Hyper-parameters
-LOADMODEL = True
+LOADMODEL = False
 ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
-BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
-NUM_EPOCHS = 40
+BATCH_SIZE = 256 # Dunnmon recommends 64-256 (>=16) 
+NUM_EPOCHS = 10
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
 LRDECAY_GAMMA = 0.1
@@ -168,8 +168,8 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
             if phase == 'train':
-                scheduler.step()
                 model.train()  # Set model to training mode
+                scheduler.step()
             else:
                 model.eval()   # Set model to evaluate mode
 
@@ -178,7 +178,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
-                inputs = inputs.to(device)
+                inputs = inputs.to(device, dtype=torch.float) # ensure float to match type of weights, which are float type
                 labels = labels.to(device)
 
                 # zero the parameter gradients
@@ -195,6 +195,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
+                        
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
@@ -237,7 +238,7 @@ def visualize_model(model, dataloaders, device, class_names, num_images=6, colum
 
     with torch.no_grad():
         for i, (inputs, labels) in enumerate(dataloaders[phase]):
-            inputs = inputs.to(device)
+            inputs = inputs.to(device, dtype=torch.float)
             labels = labels.to(device)
 
             outputs = model(inputs)
@@ -359,312 +360,281 @@ def main():
     timestr = time.strftime("%Y%m%d-%H%M%S")
     print(timestr)
     
+    for tt in range(1):
 #    for tt in range(30):
 #        # Get start time for this run
 #        timestr = time.strftime("%Y%m%d-%H%M%S")
 #        print(timestr)
 #    
-#        xx = 3 + random.random()*1
+#        xx = 3 + random.random()*0.1
 #        LEARNING_RATE = 10**-xx
 #        
 #        # random search hyperparameters
-#        yy = 2 + random.random()*1.5
+#        yy = 3 + random.random()*0.1
 #        ALPHA_L2REG = 1*10**-yy
 #        
-#        zz = random.random()*0.1
+#        zz = random.random()*0
 #        DROPOUT_RATE = zz
 #    
 #        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
-#    for xx in [True, False]:
-    for xx in [True]:
-        ISMULTISPECTRAL = xx
+#    for xx in [True]:
+        for xx in [True, False]:
+            ISMULTISPECTRAL = xx
+        
+            #%% Data loading
+            if ISMULTISPECTRAL: # 21-channel pickled tiled images
+                # set paths to RGB images
+                data_dir = PATH_PATCHES3D
+                out_path = PATH_OUTPUT3D
+                
+                # Data augmentation and normalization for training
+                # Just normalization for validation
+                data_transforms = {
+                    'train': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                    'val': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                    'test': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
+                    ]),
+                }
+                
+                num_channels = 21
+                
+            else: # RGB 3-channel, pickled images
+                # set paths to RGB images
+                data_dir = PATH_PATCHES2D
+                out_path = PATH_OUTPUT2D
+                        
+                # Data augmentation and normalization for training
+                # Just normalization for validation
+                data_transforms = {
+                    'train': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                    'val': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                    'test': transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
+                    ]),
+                }
+                
+                num_channels = 3
     
-        #%% Data loading
-        if ISMULTISPECTRAL:
-            # set paths to RGB images
-            data_dir = PATH_PATCHES3D
-            out_path = PATH_OUTPUT3D
-            
-            # Data augmentation and normalization for training
-            # Just normalization for validation
-            data_transforms = {
-                'train': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                ]),
-                'val': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                ]),
-                'test': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS, STD_CHANNEL_PIXELVALS)
-                ]),
-            }
-            
             image_datasets = {x: datasets.DatasetFolder(os.path.join(data_dir, x), loader=pickle_loader, 
                                                         extensions='.pkl', transform=data_transforms[x])
-                              for x in ['train', 'val', 'test']}
-            num_channels = 21
-            
-        else: # RGB 3-channel TIFF tiled images
-            # set paths to RGB images
-            data_dir = PATH_PATCHES2D
-            out_path = PATH_OUTPUT2D
-                    
-            # Data augmentation and normalization for training
-            # Just normalization for validation
-            data_transforms = {
-                'train': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                ]),
-                'val': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                ]),
-                'test': transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize(MEAN_CHANNEL_PIXELVALS[:3], STD_CHANNEL_PIXELVALS[:3])
-                ]),
-            }
-            
-            image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-                                                      data_transforms[x])
-                              for x in ['train', 'val', 'test']}
-            num_channels = 3
-            
-        print('Num channels', num_channels)
-        if not LOADMODEL:
-            dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
-                                                     shuffle=True, num_workers=0)
-                          for x in ['train', 'val', 'test']}
-        else:
-            dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
-                                                     shuffle=False, num_workers=0)
-                          for x in ['train', 'val', 'test']}
-        dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
-        class_names = image_datasets['train'].classes
-        num_classes = len(class_names)
-        
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        print(dataset_sizes)
-        print(num_classes)
-        print(device)
+                             for x in ['train', 'val', 'test']}
                 
-        #%%Finetuning the convnet
-        #Load a pretrained model and reset final fully connected layer.
-    #    model_ft = models.resnet18(pretrained=True)
-        model_ft = densenet_av.densenet_40_12_bc(pretrained=ISPRETRAINED, in_channels=num_channels, drop_rate=DROPOUT_RATE)
-        num_ftrs = model_ft.fc.in_features
-        model_ft.fc = nn.Linear(num_ftrs, num_classes)
-        
-        model_ft = model_ft.to(device)
-        
-        criterion = nn.CrossEntropyLoss()
-        
-        # Observe that all parameters are being optimized
-    #    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-        optimizer_ft = optim.Adam(model_ft.parameters(),  lr=LEARNING_RATE, weight_decay=ALPHA_L2REG) # defaulat ADAM lr = 0.001
-        
-        # Decay LR by a factor of 0.1 every 7 epochs
-        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=LRDECAY_STEP, gamma=LRDECAY_GAMMA)
-#            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=1000, gamma=LRDECAY_GAMMA) # For Adam optimizer, no need for LR decay
-        
-        #%% Train and evaluate
-        if LOADMODEL:
-            print('Loading model... Select loss/acc file:')
-            filepath = mat.uigetfile()
-            [cache_loss, cache_acc] = pickle.load(open(filepath, "rb"))
-            print('Loading model... ')
-            modelpath = filepath.replace('lossacc', 'modelparam').replace('.pkl', '.pt')
-            model_ft.load_state_dict(torch.load(modelpath))
-            model_ft.eval()
+            print('Num channels', num_channels)
+            if not LOADMODEL:
+                dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
+                                                         shuffle=True, num_workers=0)
+                              for x in ['train', 'val', 'test']}
+            else:
+                dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=BATCH_SIZE,
+                                                         shuffle=False, num_workers=0)
+                              for x in ['train', 'val', 'test']}
+            dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
+            class_names = image_datasets['train'].classes
+            num_classes = len(class_names)
             
-            # Get same filename for saving
-            path_head, path_tail = os.path.split(filepath)
-            filename_pre, path_ext = os.path.splitext(path_tail)
-            
-#            # 8-25-2019
-#            # Obtain per-image classification accuracy based on patches - loop through folders without dataloader
-#            for phase in ['train', 'val', 'test']:
-#                data_dir2 = os.path.join(data_dir, phase)
-#                tissues = os.listdir(data_dir2) # should be num_classes # of folders
-#                print('Evaluating per-specimen accuracy on dataset: ', phase)
-#                
-#                # Iterate over tissue classes
-#                for tt, tissue in enumerate(tissues):
-#                    tissue_folder = os.path.join(data_dir2, tissue)
-#                    tissue_files = os.listdir(tissue_folder)
-#                    tissue_dates = [i.split('_', 1)[0] for i in tissue_files]
-#                    unique_dates = list(set(tissue_dates))
-##                    print(unique_dates)
-#                    num_dates = np.size(unique_dates)
-#                    
-#                    num_patches_tissue_date = np.zeros((num_dates, 1))
-#                    num_correctpatches_tissue_date = np.zeros((num_dates, 1))
-#                    iscorrect_tissue_date = np.zeros((num_dates, 1))
-#                    
-#                    # Calculate fraction of correct patch predictions per tissue-date specimen
-#                    num_patches = 0
-#                    for i, session in enumerate(unique_dates):
-##                        print(session)
-#                        num_patches_tissue_date[i] = tissue_dates.count(session)
-#                        tissue_patches_session_filenames = [item for item in tissue_files if item.startswith(session)]
-#                        
-#                        # Load patches into one batch of shape [M, C, H, W]
-#                        # where M is batch size (# patches), C is # channels
-#                        patches_session = np.zeros((int(num_patches_tissue_date[i]), num_channels, TILE_HEIGHT, TILE_WIDTH))
-#                        for j, patch_filename in enumerate(tissue_patches_session_filenames):
-#                            if ISMULTISPECTRAL:
-#                                this_image = pickle_loader(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 21)
-#                                mean = np.array(MEAN_CHANNEL_PIXELVALS) 
-#                                std = np.array(STD_CHANNEL_PIXELVALS)
-#                                inp = (this_image - mean)/std
-#                            else:
-#                                this_image = mpimg.imread(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 3)
-#                                mean = np.array(MEAN_CHANNEL_PIXELVALS[:3]) 
-#                                std = np.array(STD_CHANNEL_PIXELVALS[:3])
-#                                inp = (this_image - mean)/std
-#                                
-##                            plt.figure(), plt.imshow(this_image[:,:,:3])
-##                            print(os.path.join(tissue_folder, patch_filename))
-##                            sys.exit()
-#                            patches_session[j] = inp.transpose((2, 0, 1))
-#                        
-#                        # Predict on patches
-#                        with torch.no_grad():
-#                            inputs = torch.tensor(patches_session, dtype=torch.float).to(device)
-#                            outputs = model_ft(inputs)
-#                            _, preds = torch.max(outputs, 1)
-#                            
-##                        print(preds)
-#                        
-#                        # Calculate number correct patches
-#                        true_label = tt
-#                        num_correctpatches_tissue_date[i] = np.sum(preds.cpu().numpy()==true_label)
-#                        iscorrect_tissue_date[i] = (num_correctpatches_tissue_date[i]/num_patches_tissue_date[i])>=0.5 # Assume 50% or greater patches predictions gives the overall specimen prediction
-#                        
-##                        num_patches = num_patches + num_patches_tissue_date[i]
-##                        print('  correct', num_correctpatches_tissue_date[i], num_patches_tissue_date[i], iscorrect_tissue_date[i])
-##                    print(num_patches)
-#                    
-#                    # Output per-specimen results
-#                    specimens_correct = np.sum(iscorrect_tissue_date)
-#                    print('  ', tissue, ': correct specimens ', specimens_correct, ' out of ', num_dates)
-            
-        else: # Train model from scratch
-            print('Train model...')
-            # Train
-            #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
-            model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                                   dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
-               
-            # Save loss and acc to disk
-            filename_pre = 'nclass' + str(num_classes)
-            t_size, val_acc = zip(*cache_acc['val']) # Calculate best val acc
-            bestval_acc =  max(val_acc).item()
-            
-#            filename_pre = timestr + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_' + str(LRDECAY_STEP) + '_' + str(LRDECAY_GAMMA) + '_val' +"{:.4f}".format(bestval_acc)
-            filename_pre = timestr + '_multispec' + str(ISMULTISPECTRAL) + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_L2reg' + str(ALPHA_L2REG) + '_DROPOUT' + str(DROPOUT_RATE) + '_val' +"{:.4f}".format(bestval_acc)
-            filename = 'lossacc_' + filename_pre + '.pkl'
-            pickle.dump([cache_loss, cache_acc], open(os.path.join(out_path, filename), "wb" ))
-            
-            # Save trained model's parameters for inference
-            filename2 = 'modelparam_' + filename_pre + '.pt'
-            torch.save(model_ft.state_dict(), os.path.join(out_path, filename2))
-        
-        # Evaluate 
-        model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
-        
-#        # Examine each figure and output to get granular prediction output info
-##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=90, columns=10)
-##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=10) # visualize validation images
-#        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=288, columns=12, phase='test')
-#        # Save visualization figure
-#        fig0_filename = 'visualize_' + filename_pre + '.png'
-#        fig0 = plt.gcf()
-#        fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-#        plt.savefig(os.path.join(out_path, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
-        
-        fig1, fig2 = learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
-        
-        # Save learning curve figures
-        fig1_filename = 'losscurve_' + filename_pre + '.png'
-        fig2_filename = 'acccurve_' + filename_pre + '.png'
-        fig1.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-        fig2.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-        fig1.savefig(os.path.join(out_path, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
-        fig2.savefig(os.path.join(out_path, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
-        
-        # Display confusion matrix
-        for phase in ['train', 'val', 'test']:
-            confusion_matrix = torch.zeros(num_classes, num_classes)
-            y_actu = []
-            y_pred = []
-            with torch.no_grad():
-                for i, (inputs, classes) in enumerate(dataloaders[phase]):
-                    inputs = inputs.to(device) # shape [128, 21, 36, 36]
-                    classes = classes.to(device)
-                    outputs = model_ft(inputs)
-                    _, preds = torch.max(outputs, 1)
-                    for t, p in zip(classes.view(-1), preds.view(-1)):
-                        confusion_matrix[t.long(), p.long()] += 1
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            print('Dataset sizes', dataset_sizes)
+            print('Number of classes', num_classes)
+            print('GPU vs CPU:', device)
                     
-                    # Vector of class labels and predictions
-                    y_actu = np.hstack((y_actu, classes.view(-1).cpu().numpy()))
-                    y_pred = np.hstack((y_pred, preds.view(-1).cpu().numpy()))
-        
-    #        print(confusion_matrix)
-            print(confusion_matrix.diag()/confusion_matrix.sum(1)) # per-class accuracy
-            fig3 = plot_confusion_matrix(confusion_matrix, classes=class_names, normalize=CM_NORMALIZED,
-                                  title='Confusion matrix, ' + phase)
+            #%%Finetuning the convnet
+            #Load a pretrained model and reset final fully connected layer.
+        #    model_ft = models.resnet18(pretrained=True)
+            model_ft = densenet_av.densenet_40_12_bc(pretrained=ISPRETRAINED, in_channels=num_channels, drop_rate=DROPOUT_RATE)
+            num_ftrs = model_ft.fc.in_features
+            model_ft.fc = nn.Linear(num_ftrs, num_classes)
             
-            # Save confusion matrix figure
-            fig3_filename = 'cm' + phase + '_' + filename_pre + '.pdf'
-            fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-            fig3.savefig(os.path.join(out_path, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
-        
-            # Display confusion matrix analysis
-            cm2 = pycm.ConfusionMatrix(actual_vector=y_actu, predict_vector=y_pred) # Create CM From Data
-#            cm2 = pycm.ConfusionMatrix(matrix={"Class1": {"Class1": 1, "Class2":2}, "Class2": {"Class1": 0, "Class2": 5}}) # Create CM Directly
-            cm2 # line output: pycm.ConfusionMatrix(classes: ['Class1', 'Class2'])
-            print(cm2)
+            model_ft = model_ft.to(device)
             
-    #    #%% ConvNet as fixed feature extractor
-    #    #Here, we need to freeze all the network except the final layer. We need to set requires_grad == False to freeze the parameters so that the gradients are not computed in backward().
-    #    
-    #    model_conv = torchvision.models.resnet18(pretrained=True)
-    #    for param in model_conv.parameters():
-    #        param.requires_grad = False
-    #    
-    #    # Parameters of newly constructed modules have requires_grad=True by default
-    #    num_ftrs = model_conv.fc.in_features
-    #    model_conv.fc = nn.Linear(num_ftrs, 2)
-    #    
-    #    model_conv = model_conv.to(device)
-    #    
-    #    criterion = nn.CrossEntropyLoss()
-    #    
-    #    # Observe that only parameters of final layer are being optimized as
-    #    # opposed to before.
-    #    optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
-    #    
-    #    # Decay LR by a factor of 0.1 every 7 epochs
-    #    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
-    #    
-    #    #%% Train and evaluate
-    #    #On CPU this will take about half the time compared to previous scenario. This is expected as gradients don’t need to be computed for most of the network. However, forward does need to be computed.
-    #    model_conv, cache_loss2, cache_acc2 = train_model(model_conv, criterion, optimizer_conv,
-    #                             exp_lr_scheduler, dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
-    #    
-    #    visualize_model(model_conv, dataloaders, device, class_names)
-    #    
-    #    learning_curve(cache_loss2, cache_acc2, class_names, num_epochs=NUM_EPOCHS)
-        
-    plt.ioff()
-    plt.show()
+            criterion = nn.CrossEntropyLoss()
+            
+            # Observe that all parameters are being optimized
+        #    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+            optimizer_ft = optim.Adam(model_ft.parameters(),  lr=LEARNING_RATE, weight_decay=ALPHA_L2REG) # defaulat ADAM lr = 0.001
+            
+            # Decay LR by a factor of 0.1 every 7 epochs
+            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=LRDECAY_STEP, gamma=LRDECAY_GAMMA)
+    #            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=1000, gamma=LRDECAY_GAMMA) # For Adam optimizer, no need for LR decay
+            
+            #%% Train and evaluate
+            if LOADMODEL: # load weights instead of training
+                print('Loading model... Select loss/acc file:')
+                filepath = mat.uigetfile()
+                [cache_loss, cache_acc] = pickle.load(open(filepath, "rb"))
+                print('Loading model... ')
+                modelpath = filepath.replace('lossacc', 'modelparam').replace('.pkl', '.pt')
+                model_ft.load_state_dict(torch.load(modelpath))
+                model_ft.eval()
+                
+                # Get same filename for saving
+                path_head, path_tail = os.path.split(filepath)
+                filename_pre, path_ext = os.path.splitext(path_tail)
+                
+    #            # 8-25-2019
+    #            # Obtain per-image classification accuracy based on patches - loop through folders without dataloader
+    #            for phase in ['train', 'val', 'test']:
+    #                data_dir2 = os.path.join(data_dir, phase)
+    #                tissues = os.listdir(data_dir2) # should be num_classes # of folders
+    #                print('Evaluating per-specimen accuracy on dataset: ', phase)
+    #                
+    #                # Iterate over tissue classes
+    #                for tt, tissue in enumerate(tissues):
+    #                    tissue_folder = os.path.join(data_dir2, tissue)
+    #                    tissue_files = os.listdir(tissue_folder)
+    #                    tissue_dates = [i.split('_', 1)[0] for i in tissue_files]
+    #                    unique_dates = list(set(tissue_dates))
+    ##                    print(unique_dates)
+    #                    num_dates = np.size(unique_dates)
+    #                    
+    #                    num_patches_tissue_date = np.zeros((num_dates, 1))
+    #                    num_correctpatches_tissue_date = np.zeros((num_dates, 1))
+    #                    iscorrect_tissue_date = np.zeros((num_dates, 1))
+    #                    
+    #                    # Calculate fraction of correct patch predictions per tissue-date specimen
+    #                    num_patches = 0
+    #                    for i, session in enumerate(unique_dates):
+    ##                        print(session)
+    #                        num_patches_tissue_date[i] = tissue_dates.count(session)
+    #                        tissue_patches_session_filenames = [item for item in tissue_files if item.startswith(session)]
+    #                        
+    #                        # Load patches into one batch of shape [M, C, H, W]
+    #                        # where M is batch size (# patches), C is # channels
+    #                        patches_session = np.zeros((int(num_patches_tissue_date[i]), num_channels, TILE_HEIGHT, TILE_WIDTH))
+    #                        for j, patch_filename in enumerate(tissue_patches_session_filenames):
+    #                            if ISMULTISPECTRAL:
+    #                                this_image = pickle_loader(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 21)
+    #                                mean = np.array(MEAN_CHANNEL_PIXELVALS) 
+    #                                std = np.array(STD_CHANNEL_PIXELVALS)
+    #                                inp = (this_image - mean)/std
+    #                            else:
+    #                                this_image = mpimg.imread(os.path.join(tissue_folder, patch_filename)) # read image, shape (H, W, 3)
+    #                                mean = np.array(MEAN_CHANNEL_PIXELVALS[:3]) 
+    #                                std = np.array(STD_CHANNEL_PIXELVALS[:3])
+    #                                inp = (this_image - mean)/std
+    #                                
+    ##                            plt.figure(), plt.imshow(this_image[:,:,:3])
+    ##                            print(os.path.join(tissue_folder, patch_filename))
+    ##                            sys.exit()
+    #                            patches_session[j] = inp.transpose((2, 0, 1))
+    #                        
+    #                        # Predict on patches
+    #                        with torch.no_grad():
+    #                            inputs = torch.tensor(patches_session, dtype=torch.float).to(device)
+    #                            outputs = model_ft(inputs)
+    #                            _, preds = torch.max(outputs, 1)
+    #                            
+    ##                        print(preds)
+    #                        
+    #                        # Calculate number correct patches
+    #                        true_label = tt
+    #                        num_correctpatches_tissue_date[i] = np.sum(preds.cpu().numpy()==true_label)
+    #                        iscorrect_tissue_date[i] = (num_correctpatches_tissue_date[i]/num_patches_tissue_date[i])>=0.5 # Assume 50% or greater patches predictions gives the overall specimen prediction
+    #                        
+    ##                        num_patches = num_patches + num_patches_tissue_date[i]
+    ##                        print('  correct', num_correctpatches_tissue_date[i], num_patches_tissue_date[i], iscorrect_tissue_date[i])
+    ##                    print(num_patches)
+    #                    
+    #                    # Output per-specimen results
+    #                    specimens_correct = np.sum(iscorrect_tissue_date)
+    #                    print('  ', tissue, ': correct specimens ', specimens_correct, ' out of ', num_dates)
+                
+            else: # Train model from scratch
+                print('Train model...')
+                # Train
+                #It should take around 15-25 min on CPU. On GPU though, it takes less than a minute.
+                model_ft, cache_loss, cache_acc = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                                       dataloaders, device, dataset_sizes, num_epochs=NUM_EPOCHS)
+                   
+                # Save loss and acc to disk
+                filename_pre = 'nclass' + str(num_classes)
+                t_size, val_acc = zip(*cache_acc['val']) # Calculate best val acc
+                bestval_acc =  max(val_acc).item()
+                
+    #            filename_pre = timestr + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_' + str(LRDECAY_STEP) + '_' + str(LRDECAY_GAMMA) + '_val' +"{:.4f}".format(bestval_acc)
+                filename_pre = timestr + '_multispec' + str(ISMULTISPECTRAL) + '_nclass' + str(num_classes) + '_pretrain' + str(ISPRETRAINED)+ '_batch' + str(BATCH_SIZE) + '_epoch' + str(NUM_EPOCHS) + '_lr' + str(LEARNING_RATE) + '_L2reg' + str(ALPHA_L2REG) + '_DROPOUT' + str(DROPOUT_RATE) + '_val' +"{:.4f}".format(bestval_acc)
+                filename = 'lossacc_' + filename_pre + '.pkl'
+                pickle.dump([cache_loss, cache_acc], open(os.path.join(out_path, filename), "wb" ))
+                
+                # Save trained model's parameters for inference
+                filename2 = 'modelparam_' + filename_pre + '.pt'
+                torch.save(model_ft.state_dict(), os.path.join(out_path, filename2))
+            
+            # Evaluate 
+            model_ft.eval() # set dropout and batch normalization layers to evaluation mode before running inference
+            
+    #        # Examine each figure and output to get granular prediction output info
+    ##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=90, columns=10)
+    ##        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=10) # visualize validation images
+    #        fig0 = visualize_model(model_ft,  dataloaders, device, class_names, num_images=288, columns=12, phase='test')
+    #        # Save visualization figure
+    #        fig0_filename = 'visualize_' + filename_pre + '.png'
+    #        fig0 = plt.gcf()
+    #        fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    #        plt.savefig(os.path.join(out_path, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
+            
+            fig1, fig2 = learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
+            
+            # Save learning curve figures
+            fig1_filename = 'losscurve_' + filename_pre + '.png'
+            fig2_filename = 'acccurve_' + filename_pre + '.png'
+            fig1.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+            fig2.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+            fig1.savefig(os.path.join(out_path, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
+            fig2.savefig(os.path.join(out_path, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
+            
+            # Display confusion matrix
+            for phase in ['train', 'val', 'test']:
+                confusion_matrix = torch.zeros(num_classes, num_classes)
+                y_actu = []
+                y_pred = []
+                with torch.no_grad():
+                    for i, (inputs, classes) in enumerate(dataloaders[phase]):
+                        inputs = inputs.to(device, dtype=torch.float) # shape [128, 21, 36, 36]
+                        classes = classes.to(device)
+                        outputs = model_ft(inputs)
+                        _, preds = torch.max(outputs, 1)
+                        for t, p in zip(classes.view(-1), preds.view(-1)):
+                            confusion_matrix[t.long(), p.long()] += 1
+                        
+                        # Vector of class labels and predictions
+                        y_actu = np.hstack((y_actu, classes.view(-1).cpu().numpy()))
+                        y_pred = np.hstack((y_pred, preds.view(-1).cpu().numpy()))
+            
+        #        print(confusion_matrix)
+                print(confusion_matrix.diag()/confusion_matrix.sum(1)) # per-class accuracy
+                fig3 = plot_confusion_matrix(confusion_matrix, classes=class_names, normalize=CM_NORMALIZED,
+                                      title='Confusion matrix, ' + phase)
+                
+                # Save confusion matrix figure
+                fig3_filename = 'cm' + phase + '_' + filename_pre + '.pdf'
+                fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+                fig3.savefig(os.path.join(out_path, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
+            
+                # Display confusion matrix analysis
+                cm2 = pycm.ConfusionMatrix(actual_vector=y_actu, predict_vector=y_pred) # Create CM From Data
+    #            cm2 = pycm.ConfusionMatrix(matrix={"Class1": {"Class1": 1, "Class2":2}, "Class2": {"Class1": 0, "Class2": 5}}) # Create CM Directly
+                cm2 # line output: pycm.ConfusionMatrix(classes: ['Class1', 'Class2'])
+                print(cm2)
+                
+            
+        plt.ioff()
+        plt.show()
     
 if __name__=='__main__':
     main()

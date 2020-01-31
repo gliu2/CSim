@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+tile_data_ariraw_GSL.py
 Created on Tue Jan 28 17:27:56 2020
 
 Manually tile ARIRAW image into 32x32 square patches. Tile only portion of image contained within segmentation mask.

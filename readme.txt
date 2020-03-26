@@ -7,7 +7,7 @@ ARRI .raw unprocessed images
 -tile_data_ariraw_GSL.py - run to train / evaluate neural network
 -train_arrinet_arrirawTiles.py - convert full images ([1]) to tiled 32x32 pixel images ([2])
 
-Processed TIFF images
+Processed .TIFF images
 -train_arrinetRGB.py - run to train / evaluate neural network
 -tile_data_GSL.py - convert full images ([1]) to tiled 36x36 pixel images ([2])
 
@@ -19,7 +19,7 @@ Processed TIFF images
 
 == Data Files ==
 [1] full images - split into 'train', 'val', 'test' folders
-[2] tiled or patch images - 
+[2] tiled or patch images - 'patches2d' contains RGB images, 'patches3d' contains multispectral images
 
 == Installation ==
 Anaconda, Python 3.6, PyTorch

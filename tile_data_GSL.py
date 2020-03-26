@@ -9,7 +9,8 @@ Before running:
     -Update CSV file with latest tissue dataset: arritissue_sessions.csv (C:/Users/CTLab/Documents/George/Python_data/arritissue_data)
 
 @author: CTLab
-Last edit: 8-25-19 - updated tile shape from 36x36 (error) -> (32x32). All previous models trained on 36x36 tiles! 
+Past edit: 8-25-19 - updated tile shape from 36x36 (error) -> (32x32). All previous models trained on 36x36 tiles! 
+Last edit: 3/26/20 - updated tile shape back to 36x36 to maintain consistency with prior results
 George Liu
 
 Dependencies: dataloading_arriGSL.py, mat.py
@@ -58,7 +59,7 @@ MY_FRACINMASK = 1
 
 #%% 8-14-19: Define function to tile image into patches
 
-def gettiles2d(im, mask, tile_size=(32,32), fracinmask=0.5):
+def gettiles2d(im, mask, tile_size=(36,36), fracinmask=0.5):
     """Composes several transforms together.
 
     Args:

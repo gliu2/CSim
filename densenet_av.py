@@ -2,6 +2,8 @@
 """
 Created on Mon May 20 09:19:35 2019
 
+Contains densenet neural network architecture. Optional use of pretrained weights from CIFAR 10.
+
 Modified from Jared Dunnmon
 https://github.com/HazyResearch/ukb-cardiac-mri/blob/master/ukb/models/frame/densenet_av.py
 

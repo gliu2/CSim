@@ -361,7 +361,7 @@ def main():
     print(timestr)
     
 #    for tt in range(1):
-    for tt in range(30):
+    for tt in range(30):  # include this for loop to randomly sample learning rate, other hyperparameters
         # Get start time for this run
         timestr = time.strftime("%Y%m%d-%H%M%S")
         print(timestr)

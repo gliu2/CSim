@@ -5,6 +5,7 @@ MATLAB-like functions for Python 3.5
 Created on Fri Jul 29 17:12:28 2016
 
 @author: George
+Last updated: 4-1-2020
 """
 
 import numpy as np
@@ -20,9 +21,9 @@ root.withdraw() # remove annoying empty box for file dialog
 #root.focus_force()
 
 # Open file selection dialog box
-def uigetfile():
+def uigetfile(initialdir=None, title=None, filetypes=(("TIFF files","*.tif"),("jpeg files","*.jpg"),("all files","*.*"))):
     print('Select file: ')
-    file_path = filedialog.askopenfilename()
+    file_path = filedialog.askopenfilename(initialdir=initialdir, title=title, filetypes=filetypes) # docs at https://pythonspot.com/tk-file-dialogs/
     
     return file_path
     

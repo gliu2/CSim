@@ -378,8 +378,8 @@ def main():
 #    
 #        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
-#    for xx in [True]:
-        for xx in [True, False]:
+        for xx in [True]:
+#        for xx in [True, False]:
             ISMULTISPECTRAL = xx
         
             #%% Data loading

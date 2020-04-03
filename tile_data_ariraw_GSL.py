@@ -10,7 +10,11 @@ Before running:
     -Update CSV file with latest tissue dataset: arritissue_sessions.csv (C:/Users/CTLab/Documents/George/Python_data/arritissue_data)
 
 @author: CTLab
-Last edit: 1/28/2020 - adapted from tile_data_GSL.py to import .mat data of ARIRAW image RGB demosaiced unprocessed images.
+Last edit: 
+    1/28/2020 - adapted from tile_data_GSL.py to import .mat data of ARIRAW image RGB demosaiced unprocessed images.
+    4/2/2020  - updated "gettiles3d" to return second output, list of foreground fractions in tiles ('cache_frac_intile'), 
+                for use when called by 'evaluate_arrinet_wholeimage.py'
+    
 George Liu
 
 Dependencies: dataloading_arriGSL.py, mat.py
@@ -53,6 +57,8 @@ def gettiles3d(im, mask, tile_size=(32,32), fracinmask=0.5):
     
     Output:
         cache_tiles (list): tiles of image in mask
+        cache_frac_intile (list): fraction of mask foreground in respective tile
+        cache_loc (list): locations of top-left corners of tiles
     """ 
         
     # Initialize sizes of image and tile    
@@ -66,6 +72,8 @@ def gettiles3d(im, mask, tile_size=(32,32), fracinmask=0.5):
     
     # Iterate through tiles
     cache_tiles = []
+    cache_frac_intile = []
+    cache_loc = []
     for i in range(n_y):
         yloc = int(i*tile_size[0]) # top-left corner
         for j in range(n_x):
@@ -73,10 +81,13 @@ def gettiles3d(im, mask, tile_size=(32,32), fracinmask=0.5):
             tile = im[yloc:yloc+tile_height, xloc:xloc+tile_width, :]
             
             # Keep tile if in mask (enough)
-            if np.average(mask[yloc:yloc+tile_height, xloc:xloc+tile_width, 0]) >= fracinmask:
+            frac_intile = np.average(mask[yloc:yloc+tile_height, xloc:xloc+tile_width, 0])
+            if frac_intile >= fracinmask:
                 cache_tiles.append(tile)
+                cache_frac_intile.append(frac_intile)
+                cache_loc.append((yloc, xloc))
             
-    return cache_tiles
+    return cache_tiles, cache_frac_intile, cache_loc
 
 #%% Utilities
 def import_ariraw_matlab(filename):
@@ -151,7 +162,7 @@ def main():
 #        segmentation = segmentation[:,:,0] # 2-dim mask of 0 or 1 
 
         # Tile image in mask
-        tiles = gettiles3d(image, segmentation, fracinmask=MY_FRACINMASK)
+        tiles = gettiles3d(image, segmentation, fracinmask=MY_FRACINMASK)[0]
         # Save RGB 3-channel image (TIFF)
 #        print('Saving to folder: ' + target_folder2d)
         save_tilesRGB(tiles, target_folder2d, this_session, this_tissue)

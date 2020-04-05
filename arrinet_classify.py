@@ -6,6 +6,7 @@ Classify multispectral 21-channel image patches (32x32)
 
 
 @author: George Liu
+Last edit: 4-4-2020
 
 Dependencies: mat.py, densenet_av.py, plot_confusion_matrix.py
 """
@@ -90,16 +91,30 @@ UNPROCESSED_RGB_MODEL_PATH = 'C:/Users/CTLab/Documents/George/Python_data/arriti
 PROCESSED_RGB_MODEL_PATH = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arrinet_trained_models/processed_images_models/rgb/modelparam_20190821-034714_multispecFalse_nclass11_pretrainFalse_batch128_epoch50_lr0.00013998960149928794_L2reg0.00444357531371092_DROPOUT0.0009256145730315746_val0.6389.pt'
 PROCESSED_MS_MODEL_PATH = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arrinet_trained_models/processed_images_models/multispectral/modelparam_20190822-140728_multispecTrue_nclass11_pretrainFalse_batch128_epoch40_lr0.00010188827580231053_L2reg0.005257047354276449_DROPOUT0.021436853591435358_val0.6773.pt'
 
+def class_str2int(class_name):
+    """Convert class name (string) to categorical index
+    
+    Args:
+        class_name (string) - name of tissue class
+        
+    Output:
+        class_int (int) - categorical index of class name
+    
+    TODO: make case insensitive
+    """
+    class_int = TISSUE_CLASSES.index(class_name)
+    return class_int
 
 def pickle_loader(input_file):
     item = pickle.load(open(input_file, 'rb'))
     return item
 
 def normalize_image(x):
-    # Normalize image patch(es) by training dataset per-channel mean and std, prior to classification.
+    """Normalize image patch(es) by training dataset per-channel mean and std, prior to classification.
     #
     # Input:
     #    x - multispectral image patch(es), ndarray matrix of shape (N, C, H, W). Also works if shape is (C, H, W).
+    """
     if np.ndim(x) == 3:
         n_channels = np.shape(x)[0]
     elif np.ndim(x) == 4:
@@ -126,9 +141,10 @@ def get_modelpath(isprocessed=False, ismultispectral=True):
     return path, n_channels
 
 def load_arrinet_classifier(isprocessed=False, ismultispectral=True): 
-    # Classifier for tissue types of image patches 
-    # Dependencies: get_modelpath
-        
+    """Classifier for tissue types of image patches 
+    Dependencies: get_modelpath
+    """    
+    
     # Get model path and number of channels 
     modelpath, n_channels = get_modelpath(isprocessed=isprocessed, ismultispectral=ismultispectral)
     print('Loading model path: ', modelpath)
@@ -171,10 +187,12 @@ def classify(x, isprocessed=False, ismultispectral=True):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         print('GPU vs CPU:', device)
         net = net.to(device)
+        x_norm = x_norm.to(device)
         
         # Classify - obtain class scores
 #        print('Input array size:', x_norm.size(), '  tensor type:', x_norm.type())
         class_scores = net(x_norm) # torch.nn.conv2d expects input size (N, C, H, W)
+        class_scores = class_scores.cpu() # copy output tensor to host memory
         
         # Obtain class probabilities
         m = nn.Softmax(dim=1)

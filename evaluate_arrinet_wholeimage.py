@@ -7,6 +7,7 @@ Evaluate ARRInet classification performance on whole tissue image
 Created on Thu Apr  2 11:28:38 2020
 
 @author: George Liu
+Last edit: 4-4-2020
 
 Dependencies: mat, tile_data_ariraw_GSL, arrinet_classify
 """
@@ -17,6 +18,7 @@ import os
 import re
 import pandas as pd
 import matplotlib.image as mpimg
+from collections import Counter
 import tile_data_ariraw_GSL
 import arrinet_classify
 
@@ -71,6 +73,27 @@ def main():
     
     # Obtain non-multispectral classification scores and predictions
     class_scores_RGB, class_prob_RGB, pred_class_int_RGB, pred_class_name_RGB = arrinet_classify.classify(stack_tiles[:,:3,:,:], isprocessed=False, ismultispectral=False)
+
+    # Print results
+    print('')
+    print('Acquisition date:', date)
+    print('Dataset:', dataset)
+    trueclass_ind = arrinet_classify.class_str2int(true_class)
+    print('True class:', true_class, '(', np.average(class_prob, axis=0)[trueclass_ind], 'MS prob,', np.average(class_prob_RGB, axis=0)[trueclass_ind], 'RGB prob)')
+    print('--- Using all tiles ---')
+    c = Counter(pred_class_name) # most common predicted class in all tiles - multispectral
+    pred_class_int_alltiles = np.argmax(np.bincount(pred_class_int.flatten())) # index of most common predicted class in all tiles - multispectral
+    c_RGB = Counter(pred_class_name_RGB)
+    pred_class_int_alltiles_RGB = np.argmax(np.bincount(pred_class_int_RGB.flatten()))
+    print('Predicted multispectral class (average prob):', c.most_common(1), '(', np.average(class_prob, axis=0)[pred_class_int_alltiles], ')')
+    print('Predicted RGB class (average prob):', c_RGB.most_common(1), '(', np.average(class_prob_RGB, axis=0)[pred_class_int_alltiles_RGB], ')')
+    num_tiles = len(list_tiles)
+    num_tiles_allmask = sum(i == 1 for i in list_fracmask_intile)
+    print('Number of tiles:', num_tiles)
+    
+    print('--- Using only 100% mask tiles ---')
+    print('Number of tiles filled:', num_tiles_allmask)
+    
 
     print('Done.')
     

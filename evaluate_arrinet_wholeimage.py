@@ -17,8 +17,10 @@ import mat
 import os
 import re
 import pandas as pd
-import matplotlib.image as mpimg
 from collections import Counter
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+from matplotlib import cm
 import tile_data_ariraw_GSL
 import arrinet_classify
 
@@ -28,6 +30,50 @@ PATH_DATASPLIT_KEY = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_dat
 PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
 
+NUM_CLASSES = 11
+
+def tiles2im(list_tile_values, mask, image_size=(1080, 1920), tile_size=(32,32), fracinmask=0.5):
+    """Quilt together list of tile values to make big image. 
+    Reverse of tile_data_ariraw_GSL.gettiles3d(...) function
+
+    Args:
+        list_tile_values (numpy array): array of values of each tile, shape (N, 1) or (N,) or list
+        mask (3D numpy array): logical array of where tissue is, of shape (H, W, Channels)
+        image_size (2D tuple): spatial dimensions of big image
+        tile_size (2D tuple): size of tile
+        fracinmask (double): minimum fraction of mask that must be in tile to copy it
+    
+    Output:
+        allclass_heatmap (2D numpy array): grayscale big image heatmap of tile values quilted together
+    """ 
+        
+    # Initialize sizes of image and tile    
+    (height, width) = image_size[:2]
+    num_channels = np.shape(list_tile_values)[-1]
+    (tile_height, tile_width) = tile_size
+    
+    # Tile indices
+    (n_y, n_x) = np.floor(np.divide((height, width), tile_size))
+    n_y = int(n_y)
+    n_x = int(n_x)
+    
+    # Iterate through tiles
+    count = 0
+    allclass_heatmap = np.zeros((height, width, num_channels))
+    for i in range(n_y):
+        yloc = int(i*tile_size[0]) # top-left corner
+        for j in range(n_x):
+            xloc = int(j*tile_size[1])
+            allclass_heatmap[yloc:yloc+tile_height, xloc:xloc+tile_width, :] = list_tile_values[count]
+            
+            # Keep tile if in mask (enough)
+            frac_intile = np.average(mask[yloc:yloc+tile_height, xloc:xloc+tile_width, 0])
+            if frac_intile < fracinmask:
+                allclass_heatmap[yloc:yloc+tile_height, xloc:xloc+tile_width, :] = 0
+                
+            count = count + 1
+                
+    return allclass_heatmap
 
 def main():
     #User select a whole raw image (.mat)
@@ -93,6 +139,26 @@ def main():
     
     print('--- Using only 100% mask tiles ---')
     print('Number of tiles filled:', num_tiles_allmask)
+    
+    # Generate heat map for big picture classification
+    # Load processed TIFF image for viewing
+    path_tiff = os.path.join(PATH_DATA, dataset, date, this_tissue)
+    tiff_filename = [f for f in os.listdir(path_tiff) if 'arriwhite20' in f][0]
+    tiff_img = mpimg.imread(os.path.join(path_tiff, tiff_filename))
+    plt.figure()
+    imgplot = plt.imshow(tiff_img)
+    plt.colorbar()
+    # Plot all 11 class predictions
+    plt.figure()
+    colormap11 = cm.get_cmap('tab10', NUM_CLASSES) #get discrete colormap
+    big_image_size = np.shape(tiff_img)
+#    allclass_heatmap = tiles2im(list_tiles, segmentation, big_image_size, tile_size=(32,32), fracinmask=0)
+#    heatmap_plot = plt.imshow(allclass_heatmap[:,:,:3]/np.max(allclass_heatmap[:,:,:3]))
+    allclass_heatmap = tiles2im(pred_class_int+1, segmentation, big_image_size, tile_size=(32,32), fracinmask=0) # multispectral predicted class heatmap
+    heatmap_plot = plt.imshow(allclass_heatmap, cmap=colormap11)
+    plt.colorbar()
+    
+    
     
 
     print('Done.')

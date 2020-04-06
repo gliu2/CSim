@@ -47,7 +47,7 @@ MY_FRACINMASK = 1
 #%% 8-14-19: Define function to tile image into patches
 
 def gettiles3d(im, mask, tile_size=(32,32), fracinmask=0.5):
-    """Composes several transforms together.
+    """Tile image into patches.
 
     Args:
         im (3D numpy array with dims): image of shape (H, W, Channels)

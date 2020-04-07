@@ -6,7 +6,7 @@ Classify multispectral 21-channel image patches (32x32)
 
 
 @author: George Liu
-Last edit: 4-4-2020
+Last edit: 4-7-2020
 
 Dependencies: mat.py, densenet_av.py, plot_confusion_matrix.py
 """

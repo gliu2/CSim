@@ -5,7 +5,7 @@ MATLAB-like functions for Python 3.5
 Created on Fri Jul 29 17:12:28 2016
 
 @author: George
-Last updated: 4-1-2020
+Last updated: 4-7-2020
 """
 
 import numpy as np
@@ -28,9 +28,9 @@ def uigetfile(initialdir=None, title=None, filetypes=(("TIFF files","*.tif"),("j
     return file_path
     
 # Open folder selection dialog box
-def uigetdir():
+def uigetdir(initialdir=None, title=None):
     print('Select folder: ')
-    folder_path = filedialog.askdirectory()
+    folder_path = filedialog.askdirectory(initialdir=initialdir, title=title)
     
     return folder_path
 

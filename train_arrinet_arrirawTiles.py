@@ -26,7 +26,7 @@ For plot confusion matrix:
 
 @author: CTLab
 George S. Liu
-1-29-20
+4-7-20
 
 Dependencies: mat.py, densenet_av.py, plot_confusion_matrix.py
 """
@@ -592,8 +592,8 @@ def main():
             fig1, fig2 = learning_curve(cache_loss, cache_acc, class_names, num_epochs=NUM_EPOCHS)
             
             # Save learning curve figures
-            fig1_filename = 'losscurve_' + filename_pre + '.png'
-            fig2_filename = 'acccurve_' + filename_pre + '.png'
+            fig1_filename = 'losscurve_' + filename_pre + '.pdf'
+            fig2_filename = 'acccurve_' + filename_pre + '.pdf'
             fig1.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
             fig2.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
             fig1.savefig(os.path.join(out_path, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)

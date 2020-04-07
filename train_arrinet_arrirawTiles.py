@@ -118,13 +118,13 @@ FIG_WIDTH = 12 # inches
 FIG_DPI = 200
 
 # Hyper-parameters
-LOADMODEL = True
+LOADMODEL = False
 ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
 BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 40
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
 LRDECAY_GAMMA = 0.1
@@ -378,8 +378,8 @@ def main():
 #    
 #        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
-        for xx in [True]:
-#        for xx in [True, False]:
+#        for xx in [True]:
+        for xx in [True, False]:
             ISMULTISPECTRAL = xx
         
             #%% Data loading

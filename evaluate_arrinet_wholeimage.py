@@ -26,6 +26,7 @@ import arrinet_classify
 import matplotlib as mpl
 import seaborn as sns
 import pickle
+from copy import deepcopy
 
 NAME_PERICHONDRIUM = 'PerichondriumWCartilage'
 NAME_CARTILAGE = 'Cartilage' 
@@ -321,11 +322,11 @@ def evaluate_bigimage(path_image):
     fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
     fig4.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
     
-    fig0.savefig(os.path.join(target_folder, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
-    fig1.savefig(os.path.join(target_folder, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
-    fig2.savefig(os.path.join(target_folder, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
-    fig3.savefig(os.path.join(target_folder, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
-    fig4.savefig(os.path.join(target_folder, fig4_filename), bbox_inches='tight', dpi=FIG_DPI)
+    # fig0.savefig(os.path.join(target_folder, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
+    # fig1.savefig(os.path.join(target_folder, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
+    # fig2.savefig(os.path.join(target_folder, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
+    # fig3.savefig(os.path.join(target_folder, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
+    # fig4.savefig(os.path.join(target_folder, fig4_filename), bbox_inches='tight', dpi=FIG_DPI)
 
 
     # Obtain occlusion predictions for multispectral arrinet
@@ -333,7 +334,7 @@ def evaluate_bigimage(path_image):
     cache_frac_tilesinmask_correct_occluded = []
     cache_prob_trueclass_inmask__occluded = []
     for i in np.arange(n_channels):
-        im_occluded = im
+        im_occluded = deepcopy(im) # copy; avoid assignment by reference
         im_occluded[:,:,i] = MEAN_CHANNEL_PIXELVALS[i] # occlude entire i'th channel with average value across training dataset
         
         # Obtain only tiles 100% in mask
@@ -354,25 +355,53 @@ def evaluate_bigimage(path_image):
     pickle_filename = 'occlusion.pickle'
     pickle.dump([cache_frac_tilesinmask_correct_occluded, cache_prob_trueclass_inmask__occluded], open(os.path.join(target_folder, pickle_filename), "wb" ))
 
+def analyze_occlusions():
+    """Analyze pickle files of occlusion outputs"""
+    PATH_EVAL_OUTPUT = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/arrinet_eval_output/'
+    dirs = [f for f in os.listdir(PATH_EVAL_OUTPUT) if os.path.isdir(os.path.join(PATH_EVAL_OUTPUT, f))]
+    df1_pred = pd.DataFrame()
+    df2_prob = pd.DataFrame()
+    for this_dir in dirs:
+        my_tissue = this_dir
+        this_dir = os.path.join(PATH_EVAL_OUTPUT, this_dir)
+        pickle_path = [f for f in os.listdir(this_dir) if f.endswith('.pickle')]
+        [cache_frac_tilesinmask_correct_occluded, cache_prob_trueclass_inmask_occluded] = pickle.load(open(os.path.join(this_dir, pickle_path[0]), 'rb'))
+        print('Occluding tissue ', my_tissue, ':', cache_frac_tilesinmask_correct_occluded, '\nprobability', cache_prob_trueclass_inmask_occluded)
+
+        # Add row to dataframe
+        new_pred = pd.DataFrame({my_tissue: cache_frac_tilesinmask_correct_occluded})
+        new_prob = pd.DataFrame({my_tissue: cache_prob_trueclass_inmask_occluded})
+        df1_pred = pd.concat([df1_pred, new_pred.T], ignore_index=True)
+        df2_prob = pd.concat([df2_prob, new_prob.T], ignore_index=True)
+        
+    # Write compiled outputs of occlusion results to csv file
+    pred_csv_filename = 'occlusions_pred.csv'
+    prob_csv_filename = 'occlusions_prob.csv'
+    df1_pred.to_csv(os.path.join(PATH_EVAL_OUTPUT, pred_csv_filename))
+    df2_prob.to_csv(os.path.join(PATH_EVAL_OUTPUT, prob_csv_filename))
+
 def main():
-#    #User select a whole raw image (.mat)
-#    print('Select an unprocessed, multispectral whole image (.mat):')
-#    path_image = mat.uigetfile(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select file', filetypes=(("MAT-file","*.mat"),("all files","*.*")))
-#    print(path_image)
-#    # Evaluate on one, user-selected big raw image
-#    evaluate_bigimage(path_image)
+    # #User select a whole raw image (.mat)
+    # print('Select an unprocessed, multispectral whole image (.mat):')
+    # path_image = mat.uigetfile(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select file', filetypes=(("MAT-file","*.mat"),("all files","*.*")))
+    # print(path_image)
+    # # Evaluate on one, user-selected big raw image
+    # evaluate_bigimage(path_image)
     
-    # Alternatively, evaluate on all tissues in one acquisition date (folder)
-    # Wrapper function for evaluate_bigimage()
-    print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
-    path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
-    print(path_dir)
-    only_matfiles = [f for f in os.listdir(path_dir) if f.endswith(".mat")]
-    num_files = len(only_matfiles)
-    for i, file in enumerate(only_matfiles):
-        print('\n Working on image', str(i), 'out of', str(num_files))
-        path_image = os.path.join(path_dir, file)
-        evaluate_bigimage(path_image)
+    # # Alternatively, evaluate on all tissues in one acquisition date (folder)
+    # # Wrapper function for evaluate_bigimage()
+    # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
+    # path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
+    # print(path_dir)
+    # only_matfiles = [f for f in os.listdir(path_dir) if f.endswith(".mat")]
+    # num_files = len(only_matfiles)
+    # for i, file in enumerate(only_matfiles):
+    #     print('\n Working on image', str(i), 'out of', str(num_files))
+    #     path_image = os.path.join(path_dir, file)
+    #     evaluate_bigimage(path_image)
+        
+    # Analyze occlusion outputs
+    analyze_occlusions()
     
     print('Done.')
     

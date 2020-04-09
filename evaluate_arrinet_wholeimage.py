@@ -34,6 +34,7 @@ PATH_DATASPLIT_KEY = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_dat
 PATH_DATA = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/'
 PATH_MASK = os.path.join(PATH_DATA, 'masks/')
 PATH_OUT = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/arrinet_eval_output/'
+PATH_EVAL_OUTPUT = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/arrinet_eval_output/'
 
 NUM_CLASSES = 11
 
@@ -299,28 +300,28 @@ def evaluate_bigimage(path_image):
     plt.axis('off')
     plt.title('Non-multispectral probability, ' + true_class + ' - ' + str(np.around(prob_trueclass_inmask_RGB*100, decimals=1)) + '%', fontsize=TITLE_FONTSIZE)
 
-    # Save figures
-    # Figure saving parameters
-    FIG_HEIGHT = 12 # inches
-    FIG_WIDTH = 8 # inches
-    FIG_DPI = 200
+    # # Save figures
+    # # Figure saving parameters
+    # FIG_HEIGHT = 12 # inches
+    # FIG_WIDTH = 8 # inches
+    # FIG_DPI = 200
     
-    filename_id = date + '_' + this_tissue + '_labelis_' + true_class + '_' + dataset
-    fig0_filename = 'tiff_' + filename_id + '.pdf'
-    fig1_filename = 'heatmap_ms_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct, decimals=0)) + '.pdf'
-    fig2_filename = 'heatmap_ms_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_ms*100, decimals=0)) + '.pdf'
-    fig3_filename = 'heatmap_rgb_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct_RGB, decimals=0)) + '.pdf'
-    fig4_filename = 'heatmap_rgb_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_RGB*100, decimals=0)) + '.pdf'
+    # filename_id = date + '_' + this_tissue + '_labelis_' + true_class + '_' + dataset
+    # fig0_filename = 'tiff_' + filename_id + '.pdf'
+    # fig1_filename = 'heatmap_ms_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct, decimals=0)) + '.pdf'
+    # fig2_filename = 'heatmap_ms_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_ms*100, decimals=0)) + '.pdf'
+    # fig3_filename = 'heatmap_rgb_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct_RGB, decimals=0)) + '.pdf'
+    # fig4_filename = 'heatmap_rgb_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_RGB*100, decimals=0)) + '.pdf'
     
-    target_folder = os.path.join(PATH_OUT, this_tissue, "")
-    if not os.path.exists(target_folder):
-        os.makedirs(target_folder)
+    # target_folder = os.path.join(PATH_OUT, this_tissue, "")
+    # if not os.path.exists(target_folder):
+    #     os.makedirs(target_folder)
     
-    fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-    fig1.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-    fig2.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-    fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
-    fig4.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    # fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    # fig1.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    # fig2.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    # fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+    # fig4.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
     
     # fig0.savefig(os.path.join(target_folder, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
     # fig1.savefig(os.path.join(target_folder, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
@@ -329,35 +330,34 @@ def evaluate_bigimage(path_image):
     # fig4.savefig(os.path.join(target_folder, fig4_filename), bbox_inches='tight', dpi=FIG_DPI)
 
 
-    # Obtain occlusion predictions for multispectral arrinet
-    n_channels = np.shape(im)[-1]
-    cache_frac_tilesinmask_correct_occluded = []
-    cache_prob_trueclass_inmask__occluded = []
-    for i in np.arange(n_channels):
-        im_occluded = deepcopy(im) # copy; avoid assignment by reference
-        im_occluded[:,:,i] = MEAN_CHANNEL_PIXELVALS[i] # occlude entire i'th channel with average value across training dataset
+    # # Obtain occlusion predictions for multispectral arrinet
+    # n_channels = np.shape(im)[-1]
+    # cache_frac_tilesinmask_correct_occluded = []
+    # cache_prob_trueclass_inmask__occluded = []
+    # for i in np.arange(n_channels):
+    #     im_occluded = deepcopy(im) # copy; avoid assignment by reference
+    #     im_occluded[:,:,i] = MEAN_CHANNEL_PIXELVALS[i] # occlude entire i'th channel with average value across training dataset
         
-        # Obtain only tiles 100% in mask
-        list_tiles_occluded, _, _ = tile_data_ariraw_GSL.gettiles3d(im_occluded, segmentation, tile_size=(32,32), fracinmask=1)
-        stack_tiles_occluded = np.stack(list_tiles_occluded, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
-        stack_tiles_occluded = np.transpose(stack_tiles_occluded, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
-        class_scores_occluded, class_prob_occluded, pred_class_int_occluded, pred_class_name_occluded = arrinet_classify.classify(stack_tiles_occluded, isprocessed=False, ismultispectral=True)
+    #     # Obtain only tiles 100% in mask
+    #     list_tiles_occluded, _, _ = tile_data_ariraw_GSL.gettiles3d(im_occluded, segmentation, tile_size=(32,32), fracinmask=1)
+    #     stack_tiles_occluded = np.stack(list_tiles_occluded, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
+    #     stack_tiles_occluded = np.transpose(stack_tiles_occluded, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
+    #     class_scores_occluded, class_prob_occluded, pred_class_int_occluded, pred_class_name_occluded = arrinet_classify.classify(stack_tiles_occluded, isprocessed=False, ismultispectral=True)
 
-        # cache in-mask % tiles predicted as true class and average probability of true class
-        frac_tiles_correct_occluded = sum(pred_class_int_occluded==trueclass_ind)[0]/num_tiles_allmask
-        prob_trueclass_ave_occluded = np.average(class_prob_occluded[:,trueclass_ind])
-        cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
-        cache_prob_trueclass_inmask__occluded.append(prob_trueclass_ave_occluded)
+    #     # cache in-mask % tiles predicted as true class and average probability of true class
+    #     frac_tiles_correct_occluded = sum(pred_class_int_occluded==trueclass_ind)[0]/num_tiles_allmask
+    #     prob_trueclass_ave_occluded = np.average(class_prob_occluded[:,trueclass_ind])
+    #     cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
+    #     cache_prob_trueclass_inmask__occluded.append(prob_trueclass_ave_occluded)
         
-        print('Occluding channel', str(i), 'results in', frac_tiles_correct_occluded, 'tiles correct and ', prob_trueclass_ave_occluded, 'average probability of true class.')
+    #     print('Occluding channel', str(i), 'results in', frac_tiles_correct_occluded, 'tiles correct and ', prob_trueclass_ave_occluded, 'average probability of true class.')
 
-    # Write cache of occluded image arrinet results to pickle file
-    pickle_filename = 'occlusion.pickle'
-    pickle.dump([cache_frac_tilesinmask_correct_occluded, cache_prob_trueclass_inmask__occluded], open(os.path.join(target_folder, pickle_filename), "wb" ))
+    # # Write cache of occluded image arrinet results to pickle file
+    # pickle_filename = 'occlusion.pickle'
+    # pickle.dump([cache_frac_tilesinmask_correct_occluded, cache_prob_trueclass_inmask__occluded], open(os.path.join(target_folder, pickle_filename), "wb" ))
 
 def analyze_occlusions():
     """Analyze pickle files of occlusion outputs"""
-    PATH_EVAL_OUTPUT = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/arrinet_eval_output/'
     dirs = [f for f in os.listdir(PATH_EVAL_OUTPUT) if os.path.isdir(os.path.join(PATH_EVAL_OUTPUT, f))]
     df1_pred = pd.DataFrame()
     df2_prob = pd.DataFrame()
@@ -380,6 +380,35 @@ def analyze_occlusions():
     df1_pred.to_csv(os.path.join(PATH_EVAL_OUTPUT, pred_csv_filename))
     df2_prob.to_csv(os.path.join(PATH_EVAL_OUTPUT, prob_csv_filename))
 
+def plot_occlusions(path_csv):
+    """Plot CSV files of occlusion differences in prediction accuracy
+    Args:
+        path_csv (str) - path to CSV file containing differences of values. Values in B2:V13 of CSV file
+        name_metric (str) - name of metric, e.g. percent of correctly predicted tiles or probability of true class
+    """
+    this_data = pd.read_csv(path_csv)
+    differences = this_data.iloc[:,1:]
+    # differences = differences.to_numpy()
+    print(differences.shape)
+    
+    class_labels = TISSUE_CLASSES[1:]
+    class_labels.insert(-2,'PerichondriumWCartilage') # Add back in label for perichondrium to match # rows
+    n_channels = len(MEAN_CHANNEL_PIXELVALS)
+    channel_blocked = np.arange(n_channels)
+
+    sns.set(font_scale=1.4)    
+    fig0 = plt.figure(figsize=(20,10))
+    sns.heatmap(differences, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True,
+            xticklabels=channel_blocked, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig0.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot1.pdf'), dpi=300)
+    
+    fig1 = plt.figure(figsize=(20,10)) # Figure with values printed on each tile
+    sns.heatmap(differences, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True, annot=np.around(differences.to_numpy(), decimals=2),
+            xticklabels=channel_blocked, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig1.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot2.pdf'), dpi=300)
+
 def main():
     # #User select a whole raw image (.mat)
     # print('Select an unprocessed, multispectral whole image (.mat):')
@@ -388,20 +417,25 @@ def main():
     # # Evaluate on one, user-selected big raw image
     # evaluate_bigimage(path_image)
     
-    # # Alternatively, evaluate on all tissues in one acquisition date (folder)
-    # # Wrapper function for evaluate_bigimage()
-    # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
-    # path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
-    # print(path_dir)
-    # only_matfiles = [f for f in os.listdir(path_dir) if f.endswith(".mat")]
-    # num_files = len(only_matfiles)
-    # for i, file in enumerate(only_matfiles):
-    #     print('\n Working on image', str(i), 'out of', str(num_files))
-    #     path_image = os.path.join(path_dir, file)
-    #     evaluate_bigimage(path_image)
+    # Alternatively, evaluate on all tissues in one acquisition date (folder)
+    # Wrapper function for evaluate_bigimage()
+    print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
+    path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
+    print(path_dir)
+    only_matfiles = [f for f in os.listdir(path_dir) if f.endswith(".mat")]
+    num_files = len(only_matfiles)
+    for i, file in enumerate(only_matfiles):
+        print('\n Working on image', str(i), 'out of', str(num_files))
+        path_image = os.path.join(path_dir, file)
+        evaluate_bigimage(path_image)
         
-    # Analyze occlusion outputs
-    analyze_occlusions()
+    # # Aggregate occlusion output pickle files into CSV spreadsheet with values across all classes
+    # analyze_occlusions()
+    
+    # # Plot occlusion analysis change in predictions/probabilities as heatmap
+    # # First manually update CSV files to reflect changes of occluded predictions/probabilities from pre-occlusion values
+    # path_csv = mat.uigetfile(initialdir=PATH_EVAL_OUTPUT, filetypes=(("CSV files", "*.csv"), ("all files", "*.*")))
+    # plot_occlusions(path_csv)
     
     print('Done.')
     

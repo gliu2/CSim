@@ -7,7 +7,7 @@ Evaluate ARRInet classification performance on whole tissue image
 Created on Thu Apr  2 11:28:38 2020
 
 @author: George Liu
-Last edit: 4-7-2020
+Last edit: 4-17-2020
 
 Dependencies: mat, tile_data_ariraw_GSL, arrinet_classify
 """
@@ -530,8 +530,10 @@ def compare_parotid_nerve(path_folder):
     path_image = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/20190520/20190520-Parotid_GSL.mat'
     im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
     n_channels = np.shape(im)[-1]
-    cache_frac_tilesinmask_correct_occluded = []
-    cache_prob_trueclass_inmask_occluded = []
+    # cache_frac_tilesinmask_correct_occluded = []
+    # cache_prob_trueclass_inmask_occluded = []
+    parotid_occlusions_pred = pd.DataFrame()
+    parotid_occlusions_prob = pd.DataFrame()
     for i in np.arange(n_channels):
         im_occluded = deepcopy(im) # copy; avoid assignment by reference
         im_occluded[:,:,i] = MEAN_CHANNEL_PIXELVALS[i] # occlude entire i'th channel with average value across training dataset
@@ -548,20 +550,24 @@ def compare_parotid_nerve(path_folder):
         class_prob_occluded_parotid = class_prob_occluded_parotid/(class_prob_occluded_parotid + class_prob_occluded_nerve)
         frac_tiles_correct_occluded = sum(class_prob_occluded_parotid > 0.5)/num_tilesinmask_parotid
         prob_trueclass_ave_occluded = np.average(class_prob_occluded_parotid)
-        cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
-        cache_prob_trueclass_inmask_occluded.append(prob_trueclass_ave_occluded)
+        # cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
+        # cache_prob_trueclass_inmask_occluded.append(prob_trueclass_ave_occluded)
+        parotid_occlusions_pred[i] = [frac_tiles_correct_occluded]
+        parotid_occlusions_prob[i] = [prob_trueclass_ave_occluded]
         
         print('Occluding parotid channel', str(i), 'results in', frac_tiles_correct_occluded, 'tiles correct and ', prob_trueclass_ave_occluded, 'average probability of true class.')
         
-    cache_frac_tilesinmask_correct_occluded_parotid = deepcopy(cache_frac_tilesinmask_correct_occluded)
-    cache_prob_trueclass_inmask_occluded_parotid = deepcopy(cache_prob_trueclass_inmask_occluded)
+    # cache_frac_tilesinmask_correct_occluded_parotid = deepcopy(cache_frac_tilesinmask_correct_occluded)
+    # cache_prob_trueclass_inmask_occluded_parotid = deepcopy(cache_prob_trueclass_inmask_occluded)
     
     # Obtain occlusion predictions for multispectral arrinet - nerve
     path_image = 'C:/Users/CTLab/Documents/George/Python_data/arritissue_data/arriraw_data/20190520/20190520-Nerve_GSL.mat'
     im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
     n_channels = np.shape(im)[-1]
-    cache_frac_tilesinmask_correct_occluded = []
-    cache_prob_trueclass_inmask_occluded = []
+    # cache_frac_tilesinmask_correct_occluded = []
+    # cache_prob_trueclass_inmask_occluded = []
+    nerve_occlusions_pred = pd.DataFrame()
+    nerve_occlusions_prob = pd.DataFrame()
     for i in np.arange(n_channels):
         im_occluded = deepcopy(im) # copy; avoid assignment by reference
         im_occluded[:,:,i] = MEAN_CHANNEL_PIXELVALS[i] # occlude entire i'th channel with average value across training dataset
@@ -578,51 +584,91 @@ def compare_parotid_nerve(path_folder):
         class_prob_occluded_nerve = class_prob_occluded_nerve/(class_prob_occluded_parotid + class_prob_occluded_nerve)
         frac_tiles_correct_occluded = sum(class_prob_occluded_nerve > 0.5)/num_tilesinmask_nerve
         prob_trueclass_ave_occluded = np.average(class_prob_occluded_nerve)
-        cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
-        cache_prob_trueclass_inmask_occluded.append(prob_trueclass_ave_occluded)
+        # cache_frac_tilesinmask_correct_occluded.append(frac_tiles_correct_occluded)
+        # cache_prob_trueclass_inmask_occluded.append(prob_trueclass_ave_occluded)
+        nerve_occlusions_pred[i] = [frac_tiles_correct_occluded]
+        nerve_occlusions_prob[i] = [prob_trueclass_ave_occluded]
         
         print('Occluding nerve channel', str(i), 'results in', frac_tiles_correct_occluded, 'tiles correct and ', prob_trueclass_ave_occluded, 'average probability of true class.')
         
-    cache_frac_tilesinmask_correct_occluded_nerve = deepcopy(cache_frac_tilesinmask_correct_occluded)
-    cache_prob_trueclass_inmask_occluded_nerve = deepcopy(cache_prob_trueclass_inmask_occluded)
+    # cache_frac_tilesinmask_correct_occluded_nerve = deepcopy(cache_frac_tilesinmask_correct_occluded)
+    # cache_prob_trueclass_inmask_occluded_nerve = deepcopy(cache_prob_trueclass_inmask_occluded)
 
     # TODO: Analyze occlusion of parotid vs nerve
-    df1_pred = pd.DataFrame()
-    df2_prob = pd.DataFrame()
-
-    # Add row to dataframe
-    new_pred = pd.DataFrame({'Parotid': cache_frac_tilesinmask_correct_occluded_parotid})
-    new_prob = pd.DataFrame({'Parotid': cache_prob_trueclass_inmask_occluded_parotid})
-    df1_pred = pd.concat([df1_pred, new_pred.T], ignore_index=True)
-    df2_prob = pd.concat([df2_prob, new_prob.T], ignore_index=True)
-    new_pred = pd.DataFrame({'Nerve': cache_frac_tilesinmask_correct_occluded_nerve})
-    new_prob = pd.DataFrame({'Nerve': cache_prob_trueclass_inmask_occluded_nerve})
-    df1_pred = pd.concat([df1_pred, new_pred.T], ignore_index=True)
-    df2_prob = pd.concat([df2_prob, new_prob.T], ignore_index=True)
-
+    diff_parotid_occlusions_pred = parotid_occlusions_pred - parotid_frac_tilesinmask_correct
+    diff_parotid_occlusions_prob = parotid_occlusions_prob - ave_prob_parotid
+    diff_nerve_occlusions_pred = nerve_occlusions_pred - nerve_frac_tilesinmask_correct
+    diff_nerve_occlusions_prob = nerve_occlusions_prob - ave_prob_nerve
     
-    # # Plot occlusion analysis of parotid vs nerve
-    # differences = this_data.iloc[:,1:]
-    # # differences = differences.to_numpy()
-    # print(differences.shape)
+    BINARY_TISSUE_CLASSES = ['Parotid', 'Nerve']
+    diff_parotid_nerve_occlusions_pred = pd.concat([diff_parotid_occlusions_pred, diff_nerve_occlusions_pred])
+    diff_parotid_nerve_occlusions_pred.index = BINARY_TISSUE_CLASSES
+    diff_parotid_nerve_occlusions_prob = pd.concat([diff_parotid_occlusions_prob, diff_nerve_occlusions_prob])
+    diff_parotid_nerve_occlusions_prob.index = BINARY_TISSUE_CLASSES
     
-    # class_labels = TISSUE_CLASSES[1:]
-    # class_labels.insert(-2,'PerichondriumWCartilage') # Add back in label for perichondrium to match # rows
-    # n_channels = len(MEAN_CHANNEL_PIXELVALS)
-    # channel_blocked = np.arange(n_channels)
+   
+    # Plot occlusion analysis of parotid vs nerve
+    print('diff_parotid_nerve_occlusions_pred shape:', diff_parotid_nerve_occlusions_pred.shape)
+    print('diff_parotid_nerve_occlusions_prob shape:', diff_parotid_nerve_occlusions_prob.shape)
+    
+    class_labels = BINARY_TISSUE_CLASSES
+    n_channels = len(MEAN_CHANNEL_PIXELVALS)
+    channel_blocked = np.arange(n_channels)
 
-    # sns.set(font_scale=1.4)    
-    # fig0 = plt.figure(figsize=(20,10))
-    # sns.heatmap(differences, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True,
-    #         xticklabels=channel_blocked, yticklabels=class_labels,
-    #         cbar_kws={'label': 'Change'})
-    # fig0.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot1.pdf'), dpi=300)
+    sns.set(font_scale=1.4)    
+    fig4 = plt.figure(figsize=(20,10))
+    sns.heatmap(diff_parotid_nerve_occlusions_pred, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True,
+            xticklabels=False, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig4.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_parotid_nerve_pred.pdf'), dpi=300)
     
-    # fig1 = plt.figure(figsize=(20,10)) # Figure with values printed on each tile
-    # sns.heatmap(differences, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True, annot=np.around(differences.to_numpy(), decimals=2),
-    #         xticklabels=channel_blocked, yticklabels=class_labels,
-    #         cbar_kws={'label': 'Change'})
-    # fig1.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot2.pdf'), dpi=300)
+    fig5 = plt.figure(figsize=(20,10)) # Figure with values printed on each tile
+    sns.heatmap(diff_parotid_nerve_occlusions_prob, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True,
+            xticklabels=False, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig5.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_parotid_nerve_prob.pdf'), dpi=300)
+    
+    # Also save occlusion plots with annotations to be able to extracte quantitative values later
+    fig6 = plt.figure(figsize=(20,10))
+    sns.heatmap(diff_parotid_nerve_occlusions_pred, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True, annot=np.around(diff_parotid_nerve_occlusions_pred.to_numpy(), decimals=2),
+            xticklabels=False, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig6.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_parotid_nerve_pred_annotated.pdf'), dpi=300)
+    
+    fig7 = plt.figure(figsize=(20,10)) # Figure with values printed on each tile
+    sns.heatmap(diff_parotid_nerve_occlusions_prob, cmap='RdBu_r', vmin=-1, vmax=1, center=0, square=True, annot=np.around(diff_parotid_nerve_occlusions_prob.to_numpy(), decimals=2),
+            xticklabels=False, yticklabels=class_labels,
+            cbar_kws={'label': 'Change'})
+    fig7.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_parotid_nerve_prob_annotated.pdf'), dpi=300)
+
+def plot_histogram_rawimage(path_image):
+    """Analyze histograms of each channel to double-check exposure durations of ARRIwhite and white-mix lights are same
+    Requested by Dr. Joyce Farrell 4-16-20
+    
+    Args:
+        path_image (str) - path to .mat file containing raw tissue multispectral image
+    """
+    # Read in image to python workspace
+    im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
+    
+    # Calculate histogram of each channel
+    num_bins = 100
+    num_channels = np.shape(im)[2]
+    cache_histograms = []
+    # for i in np.arange(num_channels):
+    for i in np.arange(num_channels):
+        print('Working on', i, 'out of', num_channels)
+        # hist, bin_edges = np.histogram(im[:,:,i], bins=num_bins)
+        plt.figure()
+        n, bins, patches = plt.hist(im[:,:,i].flatten(), bins=num_bins, facecolor='blue', alpha=1, histtype='step', density=True)  # arguments are passed to np.histogram
+        plt.title("Histogram of pixels, channel " + str(i) + ", bins =" + str(num_bins))
+        plt.xlabel('Bin')
+        plt.ylabel('Probability')
+        
+        # cache_histograms.append(hist)
+
+    plt.show()        
+    print('done')
 
 def main():
     # #User select a whole raw image (.mat)
@@ -652,10 +698,16 @@ def main():
     # path_csv = mat.uigetfile(initialdir=PATH_EVAL_OUTPUT, filetypes=(("CSV files", "*.csv"), ("all files", "*.*")))
     # plot_occlusions(path_csv)
     
-    # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
-    path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
-    print(path_outputdir)
-    compare_parotid_nerve(path_outputdir)
+    # # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
+    # path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
+    # print(path_outputdir)
+    # compare_parotid_nerve(path_outputdir)
+    
+    # 4-17-20: Plot histogram of channels for user-selected raw multispectral image
+    print('Select an unprocessed, multispectral whole image (.mat):')
+    path_image = mat.uigetfile(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select file', filetypes=(("MAT-file","*.mat"),("all files","*.*")))
+    print(path_image)
+    plot_histogram_rawimage(path_image)
     
     print('Done.')
     

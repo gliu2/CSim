@@ -52,6 +52,8 @@ import densenet_av
 import sys
 import pycm
 
+plt.rcParams["axes.grid"] = False # turn off axes grids for platting
+
 plt.ion()   # interactive mode
 
 MEAN_CHANNEL_PIXELVALS = np.array([
@@ -118,7 +120,7 @@ FIG_WIDTH = 12 # inches
 FIG_DPI = 200
 
 # Hyper-parameters
-LOADMODEL = False
+LOADMODEL = True
 ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
@@ -299,7 +301,8 @@ def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title=None,
 #                          cmap=plt.cm.Blues): 
-                          cmap=plt.cm.BuGn):
+                          # cmap=plt.cm.BuGn):
+                          cmap=plt.cm.RdPu):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -626,6 +629,10 @@ def main():
                 fig3_filename = 'cm' + phase + '_' + filename_pre + '.pdf'
                 fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
                 fig3.savefig(os.path.join(out_path, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
+                
+                # Also save as jpg, 5-1-2020
+                fig3_filename_jpg = 'cm' + phase + '_' + filename_pre + '.jpg'
+                fig3.savefig(os.path.join(out_path, fig3_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
             
                 # Display confusion matrix analysis
                 cm2 = pycm.ConfusionMatrix(actual_vector=y_actu, predict_vector=y_pred) # Create CM From Data

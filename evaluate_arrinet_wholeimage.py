@@ -7,7 +7,7 @@ Evaluate ARRInet classification performance on whole tissue image
 Created on Thu Apr  2 11:28:38 2020
 
 @author: George Liu
-Last edit: 4-17-2020
+Last edit: 5-1-2020
 
 Dependencies: mat, tile_data_ariraw_GSL, arrinet_classify
 """
@@ -30,8 +30,10 @@ from copy import deepcopy
 import sklearn
 import sklearn.metrics
 import numpy.matlib
-from scipy import interp
+from numpy import interp
 from itertools import cycle
+import compare_auc_delong_xu
+import scipy
 
 NAME_PERICHONDRIUM = 'PerichondriumWCartilage'
 NAME_CARTILAGE = 'Cartilage' 
@@ -164,6 +166,42 @@ def tiles2im(list_tile_values, mask, image_size=(1080, 1920), tile_size=(32,32),
             
     return allclass_heatmap
 
+def get_image_metadata(path_image):
+    """Extract metadata based on the image path and file name.
+    
+    Args:
+        path_image (string) - full path to the full tissue image (e.g. .mat file for raw image).
+        
+    Output:
+        date (string) - aqcuisition date
+        true_class (string) - tissue type, edited. Perichondrium is relabeled as cartilage. (ARRInet was trained with perichondrium labeled as cartilage, so it does not recognize perichondrium as its own class.)
+        this_tissue (string) - tissue type, unedited. Perichondrium stays as perichondrium.
+        dataset (string) - which dataset the image belongs to (train, validation, or test)
+        
+    Relies on CSV file at path: PATH_DATASPLIT_KEY
+    Written 5-1-2020
+    """
+    # Read in acquisition date
+    filename = os.path.basename(path_image)
+    date = filename[0:8]
+    
+    # Read in true tissue class
+    pattern = "-(.*?)_"
+    this_tissue = re.search(pattern, filename).group(1)
+    # relabel true class as cartilage if tissue type is perichondrium
+    if this_tissue.lower() == NAME_PERICHONDRIUM.lower():
+        true_class = NAME_CARTILAGE
+    else:
+        true_class = this_tissue
+          
+    # Read in which dataset the image belongs to (train, validation, or test)
+    datasplit_key = pd.read_csv(PATH_DATASPLIT_KEY)
+    boolcol_session = datasplit_key["session"]==int(date)
+    myrow = [i for i, x in enumerate(boolcol_session) if x]
+    dataset = datasplit_key["Split"][myrow[0]]
+    
+    return date, true_class, this_tissue, dataset
+
 def evaluate_bigimage(path_image):
     """Evaluate Arrinet on whole raw image, using multispectral and non-multispectral data.
     Saves figures of TIFF image and heatmaps of class predictions and true class probabilities, for both multi and non-multispectral images.
@@ -180,24 +218,8 @@ def evaluate_bigimage(path_image):
     # Read in image to python workspace
     im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
     
-    # Read in acquisition date
-    filename = os.path.basename(path_image)
-    date = filename[0:8]
-    
-    # Read in true tissue class
-    pattern = "-(.*?)_"
-    this_tissue = re.search(pattern, filename).group(1)
-    # relabel true class as cartilage if tissue type is perichondrium
-    if this_tissue.lower() == NAME_PERICHONDRIUM.lower():
-        true_class = NAME_CARTILAGE
-    else:
-        true_class = this_tissue
-    
-    # Read in which dataset the image belongs to (train, validation, or test)
-    datasplit_key = pd.read_csv(PATH_DATASPLIT_KEY)
-    boolcol_session = datasplit_key["session"]==int(date)
-    myrow = [i for i, x in enumerate(boolcol_session) if x]
-    dataset = datasplit_key["Split"][myrow[0]]
+    # Read in acquisition date, tissue class, and which dataset (train, val, test) it belongs to
+    date, true_class, this_tissue, dataset = get_image_metadata(path_image)
     
     # Tile image, including foreground and background
     # load mask
@@ -352,12 +374,24 @@ def evaluate_bigimage(path_image):
     fig3.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
     fig4.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
     
+    # Save files as PDF (vector)
     # fig0.savefig(os.path.join(target_folder, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
     # fig1.savefig(os.path.join(target_folder, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
     # fig2.savefig(os.path.join(target_folder, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
     # fig3.savefig(os.path.join(target_folder, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
     # fig4.savefig(os.path.join(target_folder, fig4_filename), bbox_inches='tight', dpi=FIG_DPI)
-
+    
+    # Save files as JPG (raster)
+    fig0_filename_jpg = 'tiff_' + filename_id + '.jpg'
+    fig1_filename_jpg = 'heatmap_ms_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct, decimals=0)) + '.jpg'
+    fig2_filename_jpg = 'heatmap_ms_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_ms*100, decimals=0)) + '.jpg'
+    fig3_filename_jpg = 'heatmap_rgb_pred' + filename_id + '_acc_' + str(np.around(frac_tilesinmask_correct_RGB, decimals=0)) + '.jpg'
+    fig4_filename_jpg = 'heatmap_rgb_probability' + filename_id + '_acc_' + str(np.around(prob_trueclass_inmask_RGB*100, decimals=0)) + '.jpg'
+    fig0.savefig(os.path.join(target_folder, fig0_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig1.savefig(os.path.join(target_folder, fig1_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig2.savefig(os.path.join(target_folder, fig2_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig3.savefig(os.path.join(target_folder, fig3_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig4.savefig(os.path.join(target_folder, fig4_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
 
     # # Obtain occlusion predictions for multispectral arrinet
     # n_channels = np.shape(im)[-1]
@@ -436,6 +470,10 @@ def plot_occlusions(path_csv):
             xticklabels=channel_blocked, yticklabels=class_labels,
             cbar_kws={'label': 'Change'})
     fig1.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot2.pdf'), dpi=300)
+    
+    # Save figures as JPG (raster)
+    fig0.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot1.jpg'), dpi=300)
+    fig1.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_plot2.jpg'), dpi=300)
 
 def compare_parotid_nerve(path_folder): 
     """Analyze parotid versus nerve prediction accuracy and probability heatmaps
@@ -545,8 +583,7 @@ def compare_parotid_nerve(path_folder):
     fig0.savefig(os.path.join(path_folder, fig0_filename), bbox_inches='tight', dpi=FIG_DPI)
     fig1.savefig(os.path.join(path_folder, fig1_filename), bbox_inches='tight', dpi=FIG_DPI)
     fig2.savefig(os.path.join(path_folder, fig2_filename), bbox_inches='tight', dpi=FIG_DPI)
-    fig3.savefig(os.path.join(path_folder, fig3_filename), bbox_inches='tight', dpi=FIG_DPI)
-    
+    fig3.savefig(os.path.join(path_folder, fig3_filename), bbox_inches='tight', dpi=FIG_DPI) 
     
     ## occlusion analysis
     # Obtain occlusion predictions for multispectral arrinet - parotid
@@ -664,6 +701,28 @@ def compare_parotid_nerve(path_folder):
             cbar_kws={'label': 'Change'})
     fig7.savefig(os.path.join(PATH_EVAL_OUTPUT,'occlusions_parotid_nerve_prob_annotated.pdf'), dpi=300)
 
+
+    # 5-1-2020: Save figures as JPG
+    fig0_filename_jpg = 'heatmap_ms_parotid_probability_parotid_vs_nerve_acc_' + str(np.around(ave_prob_parotid*100, decimals=0)) + '.jpg'
+    fig1_filename_jpg = 'heatmap_rgb_parotid_probability_parotid_vs_nerve_acc_' + str(np.around(ave_prob_parotid_RGB*100, decimals=0)) + '.jpg'
+    fig2_filename_jpg = 'heatmap_ms_nerve_probability_nerve_vs_parotid_acc_' + str(np.around(ave_prob_nerve*100, decimals=0)) + '.jpg'
+    fig3_filename_jpg = 'heatmap_rgb_nerve_probability_nerve_vs_parotid_acc_' + str(np.around(ave_prob_nerve_RGB*100, decimals=0)) + '.jpg'
+    
+    fig0.savefig(os.path.join(path_folder, fig0_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig1.savefig(os.path.join(path_folder, fig1_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig2.savefig(os.path.join(path_folder, fig2_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    fig3.savefig(os.path.join(path_folder, fig3_filename_jpg), bbox_inches='tight', dpi=FIG_DPI)
+    
+    fig4_filename_jpg = 'occlusions_parotid_nerve_pred.jpg'
+    fig5_filename_jpg = 'occlusions_parotid_nerve_prob.jpg'
+    fig6_filename_jpg = 'occlusions_parotid_nerve_pred_annotated.jpg'
+    fig7_filename_jpg = 'occlusions_parotid_nerve_prob_annotated.jpg'
+    
+    fig4.savefig(os.path.join(PATH_EVAL_OUTPUT, fig4_filename_jpg), dpi=300)
+    fig5.savefig(os.path.join(PATH_EVAL_OUTPUT, fig5_filename_jpg), dpi=300)
+    fig6.savefig(os.path.join(PATH_EVAL_OUTPUT, fig6_filename_jpg), dpi=300)
+    fig7.savefig(os.path.join(PATH_EVAL_OUTPUT, fig7_filename_jpg), dpi=300)
+
 def plot_histogram_rawimage(path_image):
     """Analyze histograms of each channel to double-check exposure durations of ARRIwhite and white-mix lights are same
     Requested by Dr. Joyce Farrell 4-16-20
@@ -671,7 +730,7 @@ def plot_histogram_rawimage(path_image):
     Args:
         path_image (str) - path to .mat file containing raw tissue multispectral image
         
-    TODO: this code function is incomplete as of 4-30-2020
+    TODO: this code function is incomplete as of 5-1-2020. REMOVE THIS TEXT WHEN DONE
     """
     # Read in image to python workspace
     im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
@@ -695,15 +754,20 @@ def plot_histogram_rawimage(path_image):
     plt.show()        
     print('done')
 
-def roc_arrinet(path_folder):
-    """Generate ROC curves and evaluate AUC of Arrinet classification of directory of whole raw images (eg test dataset).
-    Compare performance of multispectral and non-multispectral data.
+def evaluate_arrinet_folder(path_folder):
+    """Generate true labels and ARRInet predicted labels (multispectral and non-multispectral) for folder (dataset) of big images.
     
     Args:
-        path_folder (string) - path to a directory containing .mat files of raw big image data.
+        path_folder (string) - path to a directory containing .mat files of raw big images.
         
     Output:
-        none
+        y_true (np.int64 array) - binarized true class labels of all 100% mask patches, shape NxC (N=14020 32x32 pixel patches, 
+                                  C=11 tissue classes). True class binary vector for class i is y_true[:, i].
+        y_score_ms (array) - class scores, shape NxC (last fully connected layer outputs of Densenet-based ARRinets before softmax activation conversion to probabilities) -- these are not probabilities!
+        y_score_rgb (array) - class scores, shape NxC (last fully connected layer outputs of Densenet-based ARRinets before softmax activation conversion to probabilities) -- these are not probabilities!
+        
+    This is modular code to be useful for other functions, including ROC curve generation.
+    Last edit 5-1-2020
     """
     
     # Initialize true and predicted label vectors
@@ -716,30 +780,14 @@ def roc_arrinet(path_folder):
     only_matfiles = [f for f in os.listdir(path_folder) if f.endswith(".mat")]
     num_files = len(only_matfiles)
     for i, file in enumerate(only_matfiles):
-        print('\n Working on image', str(i), 'out of', str(num_files))
+        print('\n Working on image', str(i+1), 'out of', str(num_files))
         path_image = os.path.join(path_folder, file)
     
         # Read in image to python workspace
         im = tile_data_ariraw_GSL.import_ariraw_matlab(path_image) # 21 channel multispectral image, float64 ndarray shape (H, W, C) 
         
-        # Read in acquisition date
-        filename = os.path.basename(path_image)
-        date = filename[0:8]
-        
-        # Read in true tissue class
-        pattern = "-(.*?)_"
-        this_tissue = re.search(pattern, filename).group(1)
-        # relabel true class as cartilage if tissue type is perichondrium
-        if this_tissue.lower() == NAME_PERICHONDRIUM.lower():
-            true_class = NAME_CARTILAGE
-        else:
-            true_class = this_tissue
-              
-        # Read in which dataset the image belongs to (train, validation, or test)
-        datasplit_key = pd.read_csv(PATH_DATASPLIT_KEY)
-        boolcol_session = datasplit_key["session"]==int(date)
-        myrow = [i for i, x in enumerate(boolcol_session) if x]
-        dataset = datasplit_key["Split"][myrow[0]]
+        # Get image acquisition date, true label, dataset name
+        date, true_class, this_tissue, dataset = get_image_metadata(path_image)
         
         # Tile image, including foreground and background
         # load mask
@@ -749,7 +797,7 @@ def roc_arrinet(path_folder):
         segmentation = mpimg.imread(os.path.join(segmentation_folder, str(segmentation_filename[0])))
         
         # Tile image into 32x32 pixel patches
-        list_tiles, list_fracmask_intile, list_loc = tile_data_ariraw_GSL.gettiles3d(im, segmentation, tile_size=(32,32), fracinmask=0)
+        list_tiles, list_fracmask_intile, list_loc = tile_data_ariraw_GSL.gettiles3d(im, segmentation, tile_size=(32,32), fracinmask=1)
         stack_tiles = np.stack(list_tiles, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
         stack_tiles = np.transpose(stack_tiles, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
     
@@ -771,28 +819,55 @@ def roc_arrinet(path_folder):
         y_score_ms = np.concatenate((y_score_ms, class_scores), axis=0) 
         y_score_rgb = np.concatenate((y_score_rgb, class_scores_RGB), axis=0) 
         
-    print('Analyzing ROC....')
+    return y_true, y_score_ms, y_score_rgb, date, dataset
+
+def roc_arrinet(path_folder):
+    """Generate ROC curves and evaluate AUC of Arrinet classification of directory of whole raw images (eg test dataset).
+    Compare performance of multispectral and non-multispectral data.
+    
+    Args:
+        path_folder (string) - path to a directory containing .mat files of raw big image data.
+        
+    Output:
+        None
+        
+    ROC analysis code based on https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html
+    Last edit 5-1-2020
+    """
+ 
+    # Set text size of figures
+    plt.rcParams.update({'font.size': 12})
+    
+    # Initialize true and predicted label vectors
+    n_classes = len(TISSUE_CLASSES_FINAL)
+    y_test, y_score_ms, y_score_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
+        
     # Compute ROC curve and ROC area for each class
-    y_test = y_true
-    for y_score in [y_score_ms, y_score_rgb]:
+    print('Analyzing ROC....')
+    y_prob_ms = scipy.special.softmax(y_score_ms, axis=1)
+    y_prob_rgb = scipy.special.softmax(y_score_rgb, axis=1)
+    y_prob_both = {'ms': y_prob_ms, 'rgb': y_prob_rgb}
+    
+    for phase in ['ms', 'rgb']:
+        y_score = y_prob_both[phase]
         fpr = dict()
         tpr = dict()
         roc_auc = dict()
-        for i in range(n_classes):
-            fpr[i], tpr[i], _ = sklearn.metrics.roc_curve(y_test[:, i], y_score[:, i])
-            roc_auc[i] = sklearn.metrics.auc(fpr[i], tpr[i])
+        for i, tissue_type in enumerate(TISSUE_CLASSES_FINAL):
+            fpr[tissue_type], tpr[tissue_type], _ = sklearn.metrics.roc_curve(y_test[:, i], y_score[:, i])
+            roc_auc[tissue_type] = sklearn.metrics.auc(fpr[tissue_type], tpr[tissue_type])
         
         # Compute micro-average ROC curve and ROC area
         fpr["micro"], tpr["micro"], _ = sklearn.metrics.roc_curve(y_test.ravel(), y_score.ravel())
         roc_auc["micro"] = sklearn.metrics.auc(fpr["micro"], tpr["micro"])
         
         # First aggregate all false positive rates
-        all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+        all_fpr = np.unique(np.concatenate([fpr[tissue_type] for tissue_type in TISSUE_CLASSES_FINAL]))
         
         # Then interpolate all ROC curves at this points
         mean_tpr = np.zeros_like(all_fpr)
-        for i in range(n_classes):
-            mean_tpr += interp(all_fpr, fpr[i], tpr[i])
+        for tissue_type in TISSUE_CLASSES_FINAL:
+            mean_tpr += interp(all_fpr, fpr[tissue_type], tpr[tissue_type])
         
         # Finally average it and compute AUC
         mean_tpr /= n_classes
@@ -803,40 +878,221 @@ def roc_arrinet(path_folder):
         
         # Plot all ROC curves
         fig0 = plt.figure()
+        # Figure saving parameters
+        FIG_HEIGHT = 12 # inches
+        FIG_WIDTH = 8 # inches
+        fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+        
         plt.plot(fpr["micro"], tpr["micro"],
-                 label='micro-average ROC curve (area = {0:0.2f})'
+                 label='Micro-average (AUC = {0:0.2f})'
                        ''.format(roc_auc["micro"]),
                  color='deeppink', linestyle=':', linewidth=4)
         
         plt.plot(fpr["macro"], tpr["macro"],
-                 label='macro-average ROC curve (area = {0:0.2f})'
+                 label='Macro-average (AUC = {0:0.2f})'
                        ''.format(roc_auc["macro"]),
                  color='navy', linestyle=':', linewidth=4)
         
-        colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
+        # colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
+        colors = sns.color_palette('husl', n_colors=n_classes)
+        LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
+        num_styles = len(LINE_STYLES)
         lw = 2
-        for i, color in zip(range(n_classes), colors):
-            plt.plot(fpr[i], tpr[i], color=color, lw=lw,
-                     label='ROC curve of class {0} (area = {1:0.2f})'
-                     ''.format(i, roc_auc[i]))
+        for i, tissue_type in enumerate(TISSUE_CLASSES_FINAL):
+            plt.plot(fpr[tissue_type], tpr[tissue_type], color=colors[i], linestyle=LINE_STYLES[i%num_styles],
+                     lw=lw, label='{0} (AUC = {1:0.2f})'
+                     ''.format(tissue_type, roc_auc[tissue_type]))
         
         plt.plot([0, 1], [0, 1], 'k--', lw=lw)
         plt.xlim([0.0, 1.0])
         plt.ylim([0.0, 1.05])
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('Some extension of Receiver operating characteristic to multi-class')
+        plt.title(phase + ' receiver operating characteristic multi-class')
         plt.legend(loc="lower right")
-            # Save figures
-    
         plt.show()
         
+        # save figures
+        filename_id = date + '_' + dataset
+        file_name = 'ROC_curves_' + filename_id + '_' + phase + '.pdf'
+        file_name_jpg = 'ROC_curves_' + filename_id + '_' + phase + '.jpg'
+        fig0.savefig(os.path.join(PATH_EVAL_OUTPUT, file_name), dpi=300)
+        fig0.savefig(os.path.join(PATH_EVAL_OUTPUT, file_name_jpg), dpi=300)
+        
+    # Calculate significant difference statistic of AUC ARRInet-M vs ARRInet-W
+    # Collect ground truth and prediction vectors by curve label
+    y_prob_ms_label = dict()
+    y_prob_rgb_label = dict()
+    y_test_label = dict()
+    for i, tissue_type in enumerate(TISSUE_CLASSES_FINAL):
+        y_prob_ms_label[tissue_type] = y_prob_ms[:, i]
+        y_prob_rgb_label[tissue_type] = y_prob_rgb[:, i]
+        y_test_label[tissue_type] = y_test[:, i]
+    y_prob_ms_label["micro"] = y_prob_ms.ravel()
+    y_prob_rgb_label["micro"] = y_prob_rgb.ravel()
+    y_test_label["micro"] = y_test.ravel()
+    
+    curve_labels = y_test_label.keys()
+    log_pval = dict()
+    for i, this_label in enumerate(curve_labels):
+        predicted_prob1 = y_prob_ms_label[this_label]
+        predicted_prob2 = y_prob_rgb_label[this_label]
+        log_pval[this_label] = compare_auc_delong_xu.delong_roc_test(y_test_label[this_label], predicted_prob1, predicted_prob2).ravel()[0] # output is shape 1x1 ndarray, so return only entry
+        
+    print('DeLong log 10 p values:', log_pval)
+    
+    # Sanity check that average class probabilities match heat maps
+    y_prob_ms_ave = dict()
+    y_prob_rgb_ave = dict()
+    for i, this_tissue in enumerate(TISSUE_CLASSES_FINAL):
+        y_prob_ms_ave[this_tissue] = np.sum(y_prob_ms[:,i]*y_test[:, i])/np.sum(y_test[:, i])
+        y_prob_rgb_ave[this_tissue] = np.sum(y_prob_rgb[:,i]*y_test[:, i])/np.sum(y_test[:, i])
+    print('Average probability ms:', y_prob_ms_ave)
+    print('Average probability rgb:', y_prob_rgb_ave)
+    
+def roc_arrinet_parotid_nerve(path_folder):
+    """Generate ROC curves and evaluate AUC of Arrinet classification of directory of whole raw images (eg test dataset).
+    Only assess classes: Parotid and Nerve
+    Compare performance of multispectral and non-multispectral data.
+    
+    Args:
+        path_folder (string) - path to a directory containing .mat files of raw big image data.
+        
+    Output:
+        none
+        
+    ROC analysis code based on https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html
+    
+    TODO: In the future, make tissue classes a passable argument, for analysis of any tissue combination.
+    Last edit 5-1-2020
+    """
+    TISSUE_CLASSES_PAROTID_NERVE = ["Nerve", "Parotid"] # Hard-coded select classes to analyze. 
+    my_tissue_classes = TISSUE_CLASSES_PAROTID_NERVE # In future make this input argument
+    n_classes = len(TISSUE_CLASSES_PAROTID_NERVE)
+    
+    # Obtain classification scores for all tissue classes
+    y_test, y_score_ms, y_score_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
+    
+    # Obtain indices of select classes
+    select_indices = np.zeros((n_classes, 1), dtype=int)
+    for j, this_tissue in enumerate(my_tissue_classes):
+        select_indices[j] = [i for i, s in enumerate(TISSUE_CLASSES_FINAL) if this_tissue in s][0]
+        
+    # Throw out unselected classes
+    n_patches = y_test.shape[0]
+    n_allclasses = len(TISSUE_CLASSES_FINAL)
+    colmask = np.zeros((n_patches, n_allclasses))
+    colmask[:, select_indices] = True
+    rowmask = np.any(y_test*colmask, axis=1)
+    print("patch_isselected shape:", np.shape(rowmask))
+    colmask = numpy.array(colmask, dtype=bool)[0,:] # Good example of masked arrays: https://stackoverflow.com/questions/38193958/how-to-properly-mask-a-numpy-2d-array
+    rowmask = numpy.array(rowmask, dtype=bool)
+    y_test = y_test[rowmask]
+    y_test = y_test[:, colmask]
+    y_score_ms = y_score_ms[rowmask]
+    y_score_ms = y_score_ms[:, colmask]
+    y_score_rgb = y_score_rgb[rowmask]
+    y_score_rgb = y_score_rgb[:, colmask]
+    
+    # Compute ROC curves for select classes
+    print('Analyzing ROC of select classes....')
+    y_prob_ms = scipy.special.softmax(y_score_ms, axis=1)
+    y_prob_rgb = scipy.special.softmax(y_score_rgb, axis=1)
+    y_prob_both = {'ms': y_prob_ms, 'rgb': y_prob_rgb}
+    
+    for phase in ['ms', 'rgb']:
+        y_score = y_prob_both[phase]
+        fpr = dict()
+        tpr = dict()
+        roc_auc = dict()
+        for i, tissue_type in enumerate(my_tissue_classes):
+            fpr[tissue_type], tpr[tissue_type], _ = sklearn.metrics.roc_curve(y_test[:, i], y_score[:, i])
+            roc_auc[tissue_type] = sklearn.metrics.auc(fpr[tissue_type], tpr[tissue_type])
+        
+        # Compute micro-average ROC curve and ROC area
+        fpr["micro"], tpr["micro"], _ = sklearn.metrics.roc_curve(y_test.ravel(), y_score.ravel())
+        roc_auc["micro"] = sklearn.metrics.auc(fpr["micro"], tpr["micro"])
+        
+        # First aggregate all false positive rates
+        all_fpr = np.unique(np.concatenate([fpr[tissue_type] for tissue_type in my_tissue_classes]))
+        
+        # Then interpolate all ROC curves at this points
+        mean_tpr = np.zeros_like(all_fpr)
+        for tissue_type in my_tissue_classes:
+            mean_tpr += interp(all_fpr, fpr[tissue_type], tpr[tissue_type])
+        
+        # Finally average it and compute AUC
+        mean_tpr /= n_classes
+        
+        fpr["macro"] = all_fpr
+        tpr["macro"] = mean_tpr
+        roc_auc["macro"] = sklearn.metrics.auc(fpr["macro"], tpr["macro"])
+        
+        # Plot all ROC curves
+        fig0 = plt.figure()
         # Figure saving parameters
         FIG_HEIGHT = 12 # inches
         FIG_WIDTH = 8 # inches
         fig0.set_size_inches(FIG_HEIGHT, FIG_WIDTH)
+        
+        plt.plot(fpr["micro"], tpr["micro"],
+                 label='Micro-average (AUC = {0:0.2f})'
+                       ''.format(roc_auc["micro"]),
+                 color='deeppink', linestyle=':', linewidth=4)
+        
+        plt.plot(fpr["macro"], tpr["macro"],
+                 label='Macro-average (AUC = {0:0.2f})'
+                       ''.format(roc_auc["macro"]),
+                 color='navy', linestyle=':', linewidth=4)
+        
+        # colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
+        colors = sns.color_palette('husl', n_colors=n_classes)
+        LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted'] # adapted from https://stackoverflow.com/questions/8389636/creating-over-20-unique-legend-colors-using-matplotlib
+        num_styles = len(LINE_STYLES)
+        lw = 2
+        for i, tissue_type in enumerate(my_tissue_classes):
+            plt.plot(fpr[tissue_type], tpr[tissue_type], color=colors[i], linestyle=LINE_STYLES[i%num_styles],
+                     lw=lw, label='{0} (AUC = {1:0.2f})'
+                     ''.format(tissue_type, roc_auc[tissue_type]))
+        
+        plt.plot([0, 1], [0, 1], 'k--', lw=lw)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(phase + ' receiver operating characteristic multi-class')
+        plt.legend(loc="lower right")
+        plt.show()
+        
+        # save figures
+        filename_id = date + '_' + dataset
+        file_name = 'ROC_curves_parotidVnerve_' + filename_id + '_' + phase + '.pdf'
+        file_name_jpg = 'ROC_curves_parotidVnerve_' + filename_id + '_' + phase + '.jpg'
+        fig0.savefig(os.path.join(PATH_EVAL_OUTPUT, file_name), dpi=300)
+        fig0.savefig(os.path.join(PATH_EVAL_OUTPUT, file_name_jpg), dpi=300)
+        
+    # Calculate significant difference statistic of AUC ARRInet-M vs ARRInet-W
+    # Collect ground truth and prediction vectors by curve label
+    y_prob_ms_label = dict()
+    y_prob_rgb_label = dict()
+    y_test_label = dict()
+    for i, tissue_type in enumerate(my_tissue_classes):
+        y_prob_ms_label[tissue_type] = y_prob_ms[:, i]
+        y_prob_rgb_label[tissue_type] = y_prob_rgb[:, i]
+        y_test_label[tissue_type] = y_test[:, i]
+    y_prob_ms_label["micro"] = y_prob_ms.ravel()
+    y_prob_rgb_label["micro"] = y_prob_rgb.ravel()
+    y_test_label["micro"] = y_test.ravel()
     
-    # TODO: Calculate significant difference statistic of AUC ARRInet-M vs ARRInet-W
+    curve_labels = y_test_label.keys()
+    log_pval = dict()
+    for i, this_label in enumerate(curve_labels):
+        predicted_prob1 = y_prob_ms_label[this_label]
+        predicted_prob2 = y_prob_rgb_label[this_label]
+        log_pval[this_label] = compare_auc_delong_xu.delong_roc_test(y_test_label[this_label], predicted_prob1, predicted_prob2).ravel()[0] # output is shape 1x1 ndarray, so return only entry
+        
+    print('DeLong log 10 p values:', log_pval)
+
 
 def main():
     # #User select a whole raw image (.mat)
@@ -866,10 +1122,10 @@ def main():
     # path_csv = mat.uigetfile(initialdir=PATH_EVAL_OUTPUT, filetypes=(("CSV files", "*.csv"), ("all files", "*.*")))
     # plot_occlusions(path_csv)
     
-    # # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
-    # path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
-    # print(path_outputdir)
-    # compare_parotid_nerve(path_outputdir)
+    # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
+    path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
+    print(path_outputdir)
+    compare_parotid_nerve(path_outputdir)
     
     # # 4-17-20: Plot histogram of channels for user-selected raw multispectral image
     # print('Select an unprocessed, multispectral whole image (.mat):')
@@ -877,11 +1133,17 @@ def main():
     # print(path_image)
     # plot_histogram_rawimage(path_image)
     
-    # 4-30-20: Calculate ROC and AUC of ARRInet classifiers to compare performance
-    print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
-    path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
-    print(path_dir)
-    roc_arrinet(path_dir)
+    # # 4-30-20: Calculate ROC and AUC of ARRInet classifiers to compare performance
+    # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
+    # path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
+    # print(path_dir)
+    # roc_arrinet(path_dir)
+    
+    # # 5-1-20: Calculate ROC and AUC of ARRInet classifiers to compare performance - Parotid vs nerve
+    # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
+    # path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
+    # print(path_dir)
+    # roc_arrinet_parotid_nerve(path_dir)
     
     print('Done.')
     

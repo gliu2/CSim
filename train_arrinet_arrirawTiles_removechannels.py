@@ -373,23 +373,23 @@ def main():
     timestr = time.strftime("%Y%m%d-%H%M%S")
     print(timestr)
     
-    for tt in range(1):
-    # for tt in range(30):  # include this for loop to randomly sample learning rate, other hyperparameters
-    #     # Get start time for this run
-    #     timestr = time.strftime("%Y%m%d-%H%M%S")
-    #     print(timestr)
+    # for tt in range(1):
+    for tt in range(30):  # include this for loop to randomly sample learning rate, other hyperparameters
+        # Get start time for this run
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        print(timestr)
     
-    #     xx = 3 + random.random()*1
-    #     LEARNING_RATE = 10**-xx
+        xx = 3 + random.random()*1
+        LEARNING_RATE = 10**-xx
         
-    #     # random search hyperparameters
-    #     yy = 3 + random.random()*1
-    #     ALPHA_L2REG = 1*10**-yy
+        # random search hyperparameters
+        yy = 3 + random.random()*1
+        ALPHA_L2REG = 1*10**-yy
         
-    #     zz = random.random()*0
-    #     DROPOUT_RATE = zz
+        zz = random.random()*0
+        DROPOUT_RATE = zz
     
-    #     print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
+        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
     
         for xx in [True]:
         # for xx in [True, False]:

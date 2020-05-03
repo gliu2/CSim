@@ -34,6 +34,8 @@ from numpy import interp
 from itertools import cycle
 import compare_auc_delong_xu
 import scipy
+import arrinet_classify_removechannels
+from numpy import savetxt
 
 NAME_PERICHONDRIUM = 'PerichondriumWCartilage'
 NAME_CARTILAGE = 'Cartilage' 
@@ -804,19 +806,22 @@ def evaluate_arrinet_folder(path_folder):
         stack_tiles = np.stack(list_tiles, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
         stack_tiles = np.transpose(stack_tiles, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
     
-        # # 5-2-20: compare performance of ARRInet-W with ARRInet-M using just 3 channels and other channels occluded
+        # Obtain multispectral classification scores and predictions for all tiles in whole image
+        class_scores, class_prob, pred_class_int, pred_class_name = arrinet_classify.classify(stack_tiles, isprocessed=False, ismultispectral=True)
+        
+        # Obtain non-multispectral classification scores and predictions
+        class_scores_RGB, class_prob_RGB, pred_class_int_RGB, pred_class_name_RGB = arrinet_classify.classify(stack_tiles[:,:3,:,:], isprocessed=False, ismultispectral=False)  
+        
+        # # 5-2-20: compare performance of ARRInet-W with 7 channels occluded with ARRInet-M2 trained on 21-7 channels
+        # class_scores_RGB, class_prob_RGB, pred_class_int_RGB, pred_class_name_RGB = arrinet_classify_removechannels.classify(stack_tiles, isprocessed=False, ismultispectral=True) # remove 7 noisy channels
+        
         # im_occluded = deepcopy(im) # copy; avoid assignment by reference
         # BAD_CHANNELS = [3,4,13,14,15,16,17]
         # im_occluded[:,:,BAD_CHANNELS] = MEAN_CHANNEL_PIXELVALS[BAD_CHANNELS] # occlude entire i'th channel with average value across training dataset
         # list_tiles, list_fracmask_intile, list_loc = tile_data_ariraw_GSL.gettiles3d(im_occluded, segmentation, tile_size=(32,32), fracinmask=1)
         # stack_tiles = np.stack(list_tiles, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
         # stack_tiles = np.transpose(stack_tiles, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
-    
-        # Obtain multispectral classification scores and predictions for all tiles in whole image
-        class_scores, class_prob, pred_class_int, pred_class_name = arrinet_classify.classify(stack_tiles, isprocessed=False, ismultispectral=True)
-        
-        # Obtain non-multispectral classification scores and predictions
-        class_scores_RGB, class_prob_RGB, pred_class_int_RGB, pred_class_name_RGB = arrinet_classify.classify(stack_tiles[:,:3,:,:], isprocessed=False, ismultispectral=False)
+        # class_scores, class_prob, pred_class_int, pred_class_name = arrinet_classify.classify(stack_tiles, isprocessed=False, ismultispectral=True)
 
         # Create vector of binarized true class label
         num_tiles = class_scores.shape[0]
@@ -951,6 +956,11 @@ def roc_arrinet(path_folder):
         predicted_prob1 = y_prob_ms_label[this_label]
         predicted_prob2 = y_prob_rgb_label[this_label]
         log_pval[this_label] = compare_auc_delong_xu.delong_roc_test(y_test_label[this_label], predicted_prob1, predicted_prob2).ravel()[0] # output is shape 1x1 ndarray, so return only entry
+        
+        # # Write true and predicted model labels to CSV for re-calc of Delong test in R
+        # savetxt(os.path.join(PATH_EVAL_OUTPUT, this_label + '_truelabel.csv'), y_test_label[this_label], delimiter=',')
+        # savetxt(os.path.join(PATH_EVAL_OUTPUT, this_label + '_pred1.csv'), predicted_prob1, delimiter=',')
+        # savetxt(os.path.join(PATH_EVAL_OUTPUT, this_label + '_pred2.csv'), predicted_prob2, delimiter=',')
         
     print('DeLong log 10 p values:', log_pval)
     

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-train_arrinet_arrirawTiles.py
-Created on Thu Aug 15 11:00:39 2019
+train_arrinet_arrirawTiles_removechannels.py
+
+ADAPTED FROM: train_arrinet_arrirawTiles.py to assess removing 7 noisy channels [3,4,13,14,15,16,17]
 
 Train ARRInet CNN using tiled 32x32 patches of demosaiced, unprocessed ARRIScope ariraw (.ari) images.
 
@@ -26,7 +27,7 @@ For plot confusion matrix:
 
 @author: CTLab
 George S. Liu
-4-7-20
+5-2-20
 
 Dependencies: mat.py, densenet_av.py, plot_confusion_matrix.py
 """
@@ -103,6 +104,11 @@ STD_CHANNEL_PIXELVALS = np.array([
 22.4566,
 8.2226
 ])
+
+BAD_CHANNELS = [3,4,13,14,15,16,17]
+N_REMOVED = len(BAD_CHANNELS)
+MEAN_CHANNEL_PIXELVALS = np.delete(MEAN_CHANNEL_PIXELVALS, BAD_CHANNELS)
+STD_CHANNEL_PIXELVALS = np.delete(STD_CHANNEL_PIXELVALS, BAD_CHANNELS)
     
 # Tile dimensions (don't change)
 TILE_HEIGHT = 32
@@ -120,13 +126,13 @@ FIG_WIDTH = 12 # inches
 FIG_DPI = 200
 
 # Hyper-parameters
-LOADMODEL = True
+LOADMODEL = False
 ISMULTISPECTRAL = True
 DROPOUT_RATE = 0.0 # densenet paper uses 0.2
 ALPHA_L2REG = 0.001 # 1e-5
 CM_NORMALIZED = True # confusion matrix normalized?
 BATCH_SIZE = 128 # Dunnmon recommends 64-256 (>=16) 
-NUM_EPOCHS = 40
+NUM_EPOCHS = 10
 LEARNING_RATE = 0.001
 LRDECAY_STEP = 10
 LRDECAY_GAMMA = 0.1
@@ -295,7 +301,11 @@ def learning_curve(cache_loss, cache_acc, class_names, num_epochs=25):
 
 def pickle_loader(input_file):
     item = pickle.load(open(input_file, 'rb'))
-    return item
+    
+    # ADAPTATION: remove noisy channels
+    tile_adapted = np.delete(item, BAD_CHANNELS, axis=2)
+    
+    return tile_adapted
 
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
@@ -364,25 +374,25 @@ def main():
     print(timestr)
     
     for tt in range(1):
-#    for tt in range(30):  # include this for loop to randomly sample learning rate, other hyperparameters
-#        # Get start time for this run
-#        timestr = time.strftime("%Y%m%d-%H%M%S")
-#        print(timestr)
-#    
-#        xx = 3 + random.random()*1
-#        LEARNING_RATE = 10**-xx
-#        
-#        # random search hyperparameters
-#        yy = 3 + random.random()*1
-#        ALPHA_L2REG = 1*10**-yy
-#        
-#        zz = random.random()*0
-#        DROPOUT_RATE = zz
-#    
-#        print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
+    # for tt in range(30):  # include this for loop to randomly sample learning rate, other hyperparameters
+    #     # Get start time for this run
+    #     timestr = time.strftime("%Y%m%d-%H%M%S")
+    #     print(timestr)
     
-#        for xx in [True]:
-        for xx in [True, False]:
+    #     xx = 3 + random.random()*1
+    #     LEARNING_RATE = 10**-xx
+        
+    #     # random search hyperparameters
+    #     yy = 3 + random.random()*1
+    #     ALPHA_L2REG = 1*10**-yy
+        
+    #     zz = random.random()*0
+    #     DROPOUT_RATE = zz
+    
+    #     print('Iteration: ', tt, LEARNING_RATE , ALPHA_L2REG, DROPOUT_RATE)
+    
+        for xx in [True]:
+        # for xx in [True, False]:
             ISMULTISPECTRAL = xx
         
             #%% Data loading
@@ -408,7 +418,7 @@ def main():
                     ]),
                 }
                 
-                num_channels = 21
+                num_channels = 21 - N_REMOVED
                 
             else: # RGB 3-channel, pickled images
                 # set paths to RGB images

@@ -278,6 +278,7 @@ def evaluate_bigimage(path_image):
     print('Probability of true class (multispectral):', str(np.around(prob_trueclass_inmask_ms*100, decimals=1)) + '%')
     print('Probability of true class (non-multispectral):', str(np.around(prob_trueclass_inmask_RGB*100, decimals=1)) + '%')
     
+    
     # Generate heat map for big picture classification
     # Load processed TIFF image for viewing
     TITLE_FONTSIZE = 20
@@ -775,6 +776,8 @@ def evaluate_arrinet_folder(path_folder):
     y_true = np.array([], dtype=np.int64).reshape(0,n_classes) 
     y_score_ms = np.array([], dtype=np.int64).reshape(0,n_classes) 
     y_score_rgb = np.array([], dtype=np.int64).reshape(0,n_classes) 
+    y_pred_ms = np.array([], dtype=np.int64).reshape(0,1)
+    y_pred_rgb = np.array([], dtype=np.int64).reshape(0,1)
     
     # Read in raw images in folder path
     only_matfiles = [f for f in os.listdir(path_folder) if f.endswith(".mat")]
@@ -801,6 +804,14 @@ def evaluate_arrinet_folder(path_folder):
         stack_tiles = np.stack(list_tiles, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
         stack_tiles = np.transpose(stack_tiles, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
     
+        # # 5-2-20: compare performance of ARRInet-W with ARRInet-M using just 3 channels and other channels occluded
+        # im_occluded = deepcopy(im) # copy; avoid assignment by reference
+        # BAD_CHANNELS = [3,4,13,14,15,16,17]
+        # im_occluded[:,:,BAD_CHANNELS] = MEAN_CHANNEL_PIXELVALS[BAD_CHANNELS] # occlude entire i'th channel with average value across training dataset
+        # list_tiles, list_fracmask_intile, list_loc = tile_data_ariraw_GSL.gettiles3d(im_occluded, segmentation, tile_size=(32,32), fracinmask=1)
+        # stack_tiles = np.stack(list_tiles, axis=0) # 4-D ndarray of shape (N=1980, H=32, W=32, C=21)
+        # stack_tiles = np.transpose(stack_tiles, axes=(0, 3, 1, 2)) # permute dimensions from ndarray (N, H, W, C) to (N, C, H, W) 
+    
         # Obtain multispectral classification scores and predictions for all tiles in whole image
         class_scores, class_prob, pred_class_int, pred_class_name = arrinet_classify.classify(stack_tiles, isprocessed=False, ismultispectral=True)
         
@@ -818,8 +829,10 @@ def evaluate_arrinet_folder(path_folder):
         y_true = np.concatenate((y_true, this_label), axis=0) 
         y_score_ms = np.concatenate((y_score_ms, class_scores), axis=0) 
         y_score_rgb = np.concatenate((y_score_rgb, class_scores_RGB), axis=0) 
+        y_pred_ms = np.concatenate((y_pred_ms, pred_class_int), axis=0)
+        y_pred_rgb = np.concatenate((y_pred_rgb, pred_class_int_RGB), axis=0)
         
-    return y_true, y_score_ms, y_score_rgb, date, dataset
+    return y_true, y_score_ms, y_score_rgb, y_pred_ms, y_pred_rgb, date, dataset
 
 def roc_arrinet(path_folder):
     """Generate ROC curves and evaluate AUC of Arrinet classification of directory of whole raw images (eg test dataset).
@@ -836,11 +849,11 @@ def roc_arrinet(path_folder):
     """
  
     # Set text size of figures
-    plt.rcParams.update({'font.size': 12})
+    plt.rcParams.update({'font.size': 12, 'axes.facecolor': "w", "axes.grid": False}) # 'figure.facecolor': "w", 
     
     # Initialize true and predicted label vectors
     n_classes = len(TISSUE_CLASSES_FINAL)
-    y_test, y_score_ms, y_score_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
+    y_test, y_score_ms, y_score_rgb, y_pred_ms, y_pred_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
         
     # Compute ROC curve and ROC area for each class
     print('Analyzing ROC....')
@@ -950,6 +963,45 @@ def roc_arrinet(path_folder):
     print('Average probability ms:', y_prob_ms_ave)
     print('Average probability rgb:', y_prob_rgb_ave)
     
+    # Calculate additional test statistics. 
+    # TODO: make stats microaverage and macroaverage measures
+    print('Test statistics')
+    models_preds = {"ms": y_pred_ms, "rgb": y_pred_rgb}
+    for phase in {"ms", "rgb"}:
+        print('Classifier:', phase)
+        # Initialize stats
+        acc = np.zeros((n_classes, 1))
+        sensitivity = np.zeros((n_classes, 1))
+        precision = np.zeros((n_classes, 1))
+        f1 = np.zeros((n_classes, 1))
+        
+        # Obtain stats for model
+        y_pred = models_preds[phase]
+        for i, this_tissue in enumerate(TISSUE_CLASSES_FINAL):
+            y_true = y_test[:, i]
+            y_pred_this = np.equal(y_pred, i)
+            acc[i] = sklearn.metrics.accuracy_score(y_true, y_pred_this)
+            sensitivity[i] = sklearn.metrics.recall_score(y_true, y_pred_this) 
+            precision[i] = sklearn.metrics.precision_score(y_true, y_pred_this)
+            f1[i] = sklearn.metrics.f1_score(y_true, y_pred_this)
+            
+            print(this_tissue, '\n\t acc:', acc[i][0], '\n\t sensitivity:', sensitivity[i][0], '\n\t precision:', precision[i][0], '\n\t f1 score:', f1[i][0])
+            
+        # Calculate macro-average stats
+        acc_macro = np.average(acc)
+        sensitivity_macro = np.average(sensitivity)
+        precision_macro = np.average(precision)
+        f1_macro = np.average(f1)
+        print('Macro-average \n\t acc:', acc_macro, '\n\t sensitivity:', sensitivity_macro, '\n\t precision:', precision_macro, '\n\t f1 score:', f1_macro)
+        
+        # Calculate micro-average stats
+        class_weights = np.sum(y_test, axis=0).reshape((n_classes, 1))
+        acc_micro = np.average(acc, weights=class_weights)
+        sensitivity_micro = np.average(sensitivity, weights=class_weights)
+        precision_micro = np.average(precision, weights=class_weights)
+        f1_micro = np.average(f1, weights=class_weights)
+        print('Micro-average \n\t acc:', acc_micro, '\n\t sensitivity:', sensitivity_micro, '\n\t precision:', precision_micro, '\n\t f1 score:', f1_micro)
+    
 def roc_arrinet_parotid_nerve(path_folder):
     """Generate ROC curves and evaluate AUC of Arrinet classification of directory of whole raw images (eg test dataset).
     Only assess classes: Parotid and Nerve
@@ -971,7 +1023,7 @@ def roc_arrinet_parotid_nerve(path_folder):
     n_classes = len(TISSUE_CLASSES_PAROTID_NERVE)
     
     # Obtain classification scores for all tissue classes
-    y_test, y_score_ms, y_score_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
+    y_test, y_score_ms, y_score_rgb, y_pred_ms, y_pred_rgb, date, dataset = evaluate_arrinet_folder(path_folder)
     
     # Obtain indices of select classes
     select_indices = np.zeros((n_classes, 1), dtype=int)
@@ -1122,10 +1174,10 @@ def main():
     # path_csv = mat.uigetfile(initialdir=PATH_EVAL_OUTPUT, filetypes=(("CSV files", "*.csv"), ("all files", "*.*")))
     # plot_occlusions(path_csv)
     
-    # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
-    path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
-    print(path_outputdir)
-    compare_parotid_nerve(path_outputdir)
+    # # Analyze parotid vs nerve binary classification  -  predicted and probability heatmaps
+    # path_outputdir = mat.uigetdir(initialdir=PATH_EVAL_OUTPUT, title='Select directory of output analysis')
+    # print(path_outputdir)
+    # compare_parotid_nerve(path_outputdir)
     
     # # 4-17-20: Plot histogram of channels for user-selected raw multispectral image
     # print('Select an unprocessed, multispectral whole image (.mat):')
@@ -1133,11 +1185,11 @@ def main():
     # print(path_image)
     # plot_histogram_rawimage(path_image)
     
-    # # 4-30-20: Calculate ROC and AUC of ARRInet classifiers to compare performance
-    # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
-    # path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
-    # print(path_dir)
-    # roc_arrinet(path_dir)
+    # 4-30-20: Calculate ROC and AUC of ARRInet classifiers to compare performance
+    print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
+    path_dir = mat.uigetdir(initialdir='C:/Users/CTLab/Documents/George/Python_data/arritissue_data/', title='Select folder')
+    print(path_dir)
+    roc_arrinet(path_dir)
     
     # # 5-1-20: Calculate ROC and AUC of ARRInet classifiers to compare performance - Parotid vs nerve
     # print('Select a folder containing unprocessed, multispectral whole images (.mat files). Folder name should be acquisition date:')
